@@ -131,17 +131,20 @@ class ProductsController extends Controller
     ## Get all products
     public function getAllProducts(Request $request)
     {
-        $request->validate([
-            'page' => 'integer|min:1',
-            'per_page' => 'integer|min:1|max:100',
-        ]);
 
-        $perPage = $request->input('per_page', 10);
+
+
         $products = Product::with(['images', 'categories'])
             ->where('stock_status', Product::STOCK_STATUS_INSTOCK)
-            ->paginate($perPage);
+            ->orderBy('woocommerce_id', 'desc')
+            ->paginate(20);
 
-        return response()->json($products);
+        return response()->json(
+            [
+                'products' => $products,
+                'message' => 'Productos obtenidos correctamente.',
+            ]
+        );
     }
 
     ## Get product
