@@ -30,6 +30,8 @@ class User extends Authenticatable
         'tel',
         'cedula_type',
         'cedula_ID',
+        'google_id',
+        'avatar',
     ];
 
     /**

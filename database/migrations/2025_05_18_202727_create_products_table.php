@@ -16,7 +16,7 @@ return new class extends Migration
             $table->unsignedBigInteger('woocommerce_id')->unique();
             $table->string('name');
             $table->string('slug');
-            $table->text('description')->nullable();
+            $table->longText('description')->nullable();
             $table->text('short_description')->nullable();
             $table->decimal('price', 10, 2)->nullable();
             $table->decimal('regular_price', 10, 2)->nullable();

@@ -6,6 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Product extends Model
 {
+    // Stock status constants
+    public const STOCK_STATUS_INSTOCK = 'instock';
+    public const STOCK_STATUS_OUTOFSTOCK = 'outofstock';
+    public const STOCK_STATUS_ONBACKORDER = 'onbackorder';
+
+
     protected $fillable = [
         'woocommerce_id',
         'name',
@@ -16,7 +22,12 @@ class Product extends Model
         'regular_price',
         'sale_price',
         'sku',
-        'status'
+        'status',
+        'stock_quantity',
+        'stock_status',
+        'total_sales',
+        'average_rating',
+        'rating_count',
     ];
 
     public function images()

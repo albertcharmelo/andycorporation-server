@@ -31,28 +31,41 @@ class AuthController extends Controller
     {
 
         ## Validacion de datos
-        $req->validate([
+        $rules = [
             'name' => 'required',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6',
-            'cedula_type' => 'required|min:1|max:2|in:v,j,e,g,r,p',
-            'cedula_ID' => 'required|min:7|max:20',
-            'tel' => 'required|unique:users,tel|regex:/^[0-9]{10,15}$/' ## Solo permite números de 10 a 15 dígitos, útil para prevenir entradas como letras o símbolos.
-        ]);
+            'email' => 'required|email',
+            'password' => 'sometimes|nullable|min:6',
+            'cedula_type' => 'nullable|sometimes|min:1|max:2|in:v,j,e,g,r,p',
+            'cedula_ID' => 'nullable|sometimes|min:7|max:20',
+            'tel' => 'nullable|sometimes|unique:users,tel|regex:/^[0-9]{10,15}$/', ## Solo permite números de 10 a 15 dígitos, útil para prevenir entradas como letras o símbolos.
+            'google_id' => 'sometimes|nullable|string|max:255', ## Google ID opcional
+            'avatar' => 'sometimes|nullable|url|max:255', ## URL del avatar opcional
+        ];
+
+        if (!$req->filled('google_id')) {
+            $rules['email'] .= '|unique:users';
+        }
+
+        $req->validate($rules);
 
 
 
         DB::beginTransaction();
         try {
             ## Crear el usuario cliente
-            $user = User::create([
-                'name' => $req->name,
-                'email' => $req->email,
-                'password' => Hash::make($req->password), ## Encrtiptar contraseña
-                'cedula_type' => $req->cedula_type,
-                'cedula_ID' => $req->cedula_ID,
-                'tel' => $req->tel,
-            ]);
+            $user = User::firstOrCreate(
+                ['email' => $req->email],
+                [
+                    'name' => $req->name,
+                    'email' => $req->email,
+                    'password' => $req->password ? Hash::make($req->password) : null, ## Encrtiptar contraseña
+                    'cedula_type' => $req->cedula_type ?? null, ## Si no se proporciona, se asigna null
+                    'cedula_ID' => $req->cedula_ID ?? null, ## Si no se proporciona, se asigna null
+                    'tel' => $req->tel ?? null, ## Si no se proporciona, se asigna null
+                    'google_id' => $req->google_id ?? null, ## Si no se proporciona, se asigna null
+                    'avatar' => $req->avatar ?? null, ## Si no se proporciona, se asigna null
+                ]
+            );
             ## Asignar rol cliente usando Spatie
             $user->assignRole('client');
             DB::commit();
@@ -115,6 +128,7 @@ class AuthController extends Controller
         }
 
         return response()->json([
+            'message' => 'Usuario logeado correctamente',
             'token' => $user->createToken("api-token")->plainTextToken,
             'user' => $user
         ]);

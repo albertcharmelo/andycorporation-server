@@ -23,49 +23,47 @@ class ProductsController extends Controller
                 'per_page' => $perPage,
                 'page' => $page,
             ]);
-            dd($products);
 
             foreach ($products as $wooProduct) {
-                if ($wooProduct['stock_quantity'] > 0) {
-                    DB::transaction(function () use ($wooProduct) {
-                        $product = Product::updateOrCreate(
-                            ['woocommerce_id' => $wooProduct->id],
-                            [
-                                'name' => $wooProduct->name,
-                                'slug' => $wooProduct->slug,
-                                'description' => $wooProduct->description,
-                                'short_description' => $wooProduct->short_description,
-                                'price' => is_numeric($wooProduct->price) ? $wooProduct->price : null,
-                                'regular_price' => is_numeric($wooProduct->regular_price) ? $wooProduct->regular_price : null,
-                                'sale_price' => is_numeric($wooProduct->sale_price) ? $wooProduct->sale_price : null,
-                                'sku' => $wooProduct->sku,
-                                'status' => $wooProduct->status,
-                                'stock_quantity' => $wooProduct->stock_quantity,
-                                'stock_status' => $wooProduct->stock_status,
-                            ]
+
+                DB::transaction(function () use ($wooProduct) {
+                    $product = Product::updateOrCreate(
+                        ['woocommerce_id' => $wooProduct->id],
+                        [
+                            'name' => $wooProduct->name,
+                            'slug' => $wooProduct->slug,
+                            'description' => $wooProduct->description,
+                            'short_description' => $wooProduct->short_description,
+                            'price' => is_numeric($wooProduct->price) ? $wooProduct->price : null,
+                            'regular_price' => is_numeric($wooProduct->regular_price) ? $wooProduct->regular_price : null,
+                            'sale_price' => is_numeric($wooProduct->sale_price) ? $wooProduct->sale_price : null,
+                            'sku' => $wooProduct->sku,
+                            'status' => $wooProduct->status,
+                            'stock_quantity' => $wooProduct->stock_quantity,
+                            'stock_status' => $wooProduct->stock_status,
+                        ]
+                    );
+
+                    // Sincronizar imágenes
+                    $product->images()->delete();
+                    foreach ($wooProduct->images as $image) {
+                        $product->images()->create([
+                            'src' => $image->src,
+                            'alt' => $image->alt ?? null,
+                        ]);
+                    }
+
+                    // Sincronizar categorías
+                    $categoryIds = [];
+                    foreach ($wooProduct->categories as $wooCategory) {
+                        $category = Category::firstOrCreate(
+                            ['woocommerce_id' => $wooCategory->id],
+                            ['name' => $wooCategory->name, 'slug' => $wooCategory->slug]
                         );
-
-                        // Sincronizar imágenes
-                        $product->images()->delete();
-                        foreach ($wooProduct->images as $image) {
-                            $product->images()->create([
-                                'src' => $image->src,
-                                'alt' => $image->alt ?? null,
-                            ]);
-                        }
-
-                        // Sincronizar categorías
-                        $categoryIds = [];
-                        foreach ($wooProduct->categories as $wooCategory) {
-                            $category = Category::firstOrCreate(
-                                ['woocommerce_id' => $wooCategory->id],
-                                ['name' => $wooCategory->name, 'slug' => $wooCategory->slug]
-                            );
-                            $categoryIds[] = $category->id;
-                        }
-                        $product->categories()->sync($categoryIds);
-                    });
-                }
+                        $categoryIds[] = $category->id;
+                    }
+                    $product->categories()->sync($categoryIds);
+                });
             }
 
             $hasMore = count($products) === $perPage;
@@ -83,51 +81,65 @@ class ProductsController extends Controller
         if (!$wooProduct) {
             return response()->json(['message' => 'Producto no encontrado en WooCommerce.'], 404);
         }
-
-        DB::transaction(function () use ($wooProduct) {
-            $product = Product::updateOrCreate(
-                ['woocommerce_id' => $wooProduct->id],
-                [
-                    'name' => $wooProduct->name,
-                    'slug' => $wooProduct->slug,
-                    'description' => $wooProduct->description,
-                    'short_description' => $wooProduct->short_description,
-                    'price' => is_numeric($wooProduct->price) ? $wooProduct->price : null,
-                    'regular_price' => is_numeric($wooProduct->regular_price) ? $wooProduct->regular_price : null,
-                    'sale_price' => is_numeric($wooProduct->sale_price) ? $wooProduct->sale_price : null,
-                    'sku' => $wooProduct->sku,
-                    'status' => $wooProduct->status,
-                    'stock_quantity' => $wooProduct->stock_quantity,
-                    'stock_status' => $wooProduct->stock_status,
-                ]
-            );
-
-            $product->images()->delete();
-            foreach ($wooProduct->images as $image) {
-                $product->images()->create([
-                    'src' => $image->src,
-                    'alt' => $image->alt ?? null,
-                ]);
-            }
-
-            $categoryIds = [];
-            foreach ($wooProduct->categories as $wooCategory) {
-                $category = Category::firstOrCreate(
-                    ['woocommerce_id' => $wooCategory->id],
-                    ['name' => $wooCategory->name, 'slug' => $wooCategory->slug]
+        try {
+            DB::transaction(function () use ($wooProduct) {
+                $product = Product::updateOrCreate(
+                    ['woocommerce_id' => $wooProduct->id],
+                    [
+                        'name' => $wooProduct->name,
+                        'slug' => $wooProduct->slug,
+                        'description' => $wooProduct->description,
+                        'short_description' => $wooProduct->short_description,
+                        'price' => is_numeric($wooProduct->price) ? $wooProduct->price : null,
+                        'regular_price' => is_numeric($wooProduct->regular_price) ? $wooProduct->regular_price : null,
+                        'sale_price' => is_numeric($wooProduct->sale_price) ? $wooProduct->sale_price : null,
+                        'sku' => $wooProduct->sku,
+                        'status' => $wooProduct->status,
+                        'stock_quantity' => $wooProduct->stock_quantity,
+                        'stock_status' => $wooProduct->stock_status,
+                        'total_sales' => $wooProduct->total_sales ?? 0,
+                        'rating_count' => $wooProduct->rating_count ?? 0,
+                        'average_rating' => $wooProduct->average_rating ?? '0.0',
+                    ]
                 );
-                $categoryIds[] = $category->id;
-            }
-            $product->categories()->sync($categoryIds);
-        });
 
-        return response()->json(['message' => 'Producto sincronizado correctamente.']);
+                $product->images()->delete();
+                foreach ($wooProduct->images as $image) {
+                    $product->images()->create([
+                        'src' => $image->src,
+                        'alt' => $image->alt ?? null,
+                    ]);
+                }
+
+                $categoryIds = [];
+                foreach ($wooProduct->categories as $wooCategory) {
+                    $category = Category::firstOrCreate(
+                        ['woocommerce_id' => $wooCategory->id],
+                        ['name' => $wooCategory->name, 'slug' => $wooCategory->slug]
+                    );
+                    $categoryIds[] = $category->id;
+                }
+                $product->categories()->sync($categoryIds);
+            });
+
+            return response()->json(['message' => 'Producto sincronizado correctamente.']);
+        } catch (\Throwable $th) {
+            return response()->json(['message' => 'Error al sincronizar el producto: ' . $th->getMessage()], 500);
+        }
     }
 
     ## Get all products
     public function getAllProducts(Request $request)
     {
-        $products = Product::with(['images', 'categories'])->get();
+        $request->validate([
+            'page' => 'integer|min:1',
+            'per_page' => 'integer|min:1|max:100',
+        ]);
+
+        $perPage = $request->input('per_page', 10);
+        $products = Product::with(['images', 'categories'])
+            ->where('stock_status', Product::STOCK_STATUS_INSTOCK)
+            ->paginate($perPage);
 
         return response()->json($products);
     }
@@ -135,7 +147,11 @@ class ProductsController extends Controller
     ## Get product
     public function getProduct(Product $product)
     {
+        if (!$product) {
+            return response()->json(['message' => 'Producto no encontrado.'], 404);
+        }
         $product->load(['images', 'categories']);
+
 
         return response()->json($product);
     }
@@ -144,9 +160,13 @@ class ProductsController extends Controller
     ## Search products
     public function searchProducts(Request $request)
     {
+        $request->validate([
+            'query' => 'required|string|max:255',
+        ]);
         $query = $request->input('query');
 
         $products = Product::with(['images', 'categories'])
+            ->where('stock_status', Product::STOCK_STATUS_INSTOCK)
             ->where('name', 'LIKE', "%{$query}%")
             ->orWhere('description', 'LIKE', "%{$query}%")
             ->orWhere('short_description', 'LIKE', "%{$query}%")
@@ -173,20 +193,34 @@ class ProductsController extends Controller
     public function getProductsByCategory($slug)
     {
         $category = Category::where('slug', $slug)->firstOrFail();
-
         $products = $category->products()->with(['images', 'categories'])->get();
-
         return response()->json($products);
     }
 
-    ## Get Sale products
-    public function getSaleProducts()
+    ## Get Popular products
+    public function getPopularProducts()
     {
         $products = Product::with(['images', 'categories'])
-            ->whereNotNull('sale_price')
-            ->where('sale_price', '>', 0)
+            ->orderBy('average_rating', 'desc')
+            ->take(10)
+            ->get();
+        return response()->json([
+            'products' => $products,
+            'message' => 'Productos más vendidos obtenidos correctamente.'
+        ])->setStatusCode(200, 'OK');
+    }
+
+    ## Get Sales products
+    public function getSalesProducts()
+    {
+        $products = Product::with(['images', 'categories'])
+            ->orderBy('total_sales', 'desc')
+            ->take(10)
             ->get();
 
-        return response()->json($products);
+        return response()->json([
+            'products' => $products,
+            'message' => 'Productos en oferta obtenidos correctamente.'
+        ])->setStatusCode(200, 'OK');
     }
 }
