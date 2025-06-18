@@ -166,15 +166,23 @@ class ProductsController extends Controller
         $request->validate([
             'query' => 'required|string|max:255',
         ]);
-        $query = $request->input('query');
 
-        $products = Product::with(['images', 'categories'])
+        $queryString = $request->input('query');
+
+        $query = Product::with(['images', 'categories'])
             ->where('stock_status', Product::STOCK_STATUS_INSTOCK)
-            ->where('name', 'LIKE', "%{$query}%")
-            ->orWhere('description', 'LIKE', "%{$query}%")
-            ->orWhere('short_description', 'LIKE', "%{$query}%")
-            ->take(10)
-            ->get();
+            ->where(function ($q) use ($queryString) {
+                $q->where('name', 'LIKE', "%{$queryString}%")
+                    ->orWhere('description', 'LIKE', "%{$queryString}%")
+                    ->orWhere('short_description', 'LIKE', "%{$queryString}%");
+            });
+
+        // Si la request incluye ?page, usamos paginate
+        if ($request->has('page')) {
+            $products = $query->paginate(15); // puedes ajustar el número por página
+        } else {
+            $products = $query->take(10)->get();
+        }
 
         return response()->json($products);
     }
