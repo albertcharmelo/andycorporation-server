@@ -173,7 +173,7 @@ class ProductsController extends Controller
         $baseQuery = Product::with(['images', 'categories'])
             ->where('stock_status', Product::STOCK_STATUS_INSTOCK);
 
-        if ($queryString && $queryString !== 'ramdom') {
+        if ($queryString && $queryString !== 'ramdom' && $queryString !== "") {
             // Si hay query, se filtra
             $baseQuery->where(function ($q) use ($queryString) {
                 $q->where('name', 'LIKE', "%{$queryString}%")
