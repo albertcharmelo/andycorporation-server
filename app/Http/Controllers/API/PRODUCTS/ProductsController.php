@@ -164,27 +164,23 @@ class ProductsController extends Controller
     public function searchProducts(Request $request)
     {
         $request->validate([
-            'query' => 'string|max:255', // <-- ahora puede ser null
+            'query' => 'nullable|string|max:255', // << permite que sea null
             'page' => 'sometimes|integer|min:1',
         ]);
-
         $queryString = $request->input('query');
 
         $baseQuery = Product::with(['images', 'categories'])
             ->where('stock_status', Product::STOCK_STATUS_INSTOCK);
 
-        if ($queryString && $queryString !== 'ramdom' && $queryString !== "") {
-            // Si hay query, se filtra
+        if (!empty($queryString)) {
             $baseQuery->where(function ($q) use ($queryString) {
                 $q->where('name', 'LIKE', "%{$queryString}%")
                     ->orWhere('sku', 'LIKE', "%{$queryString}%")
                     ->orWhere('short_description', 'LIKE', "%{$queryString}%");
             });
         } else {
-            // Si no hay query, se ordena aleatoriamente
             $baseQuery->inRandomOrder();
         }
-
         $products = $baseQuery->paginate(15);
 
         return response()->json($products);
