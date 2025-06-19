@@ -164,26 +164,28 @@ class ProductsController extends Controller
     public function searchProducts(Request $request)
     {
         $request->validate([
-            'query' => 'required|string|max:255',
+            'query' => 'nullable|string|max:255', // <-- ahora puede ser null
             'page' => 'sometimes|integer|min:1',
         ]);
 
         $queryString = $request->input('query');
 
-        $query = Product::with(['images', 'categories'])
-            ->where('stock_status', Product::STOCK_STATUS_INSTOCK)
-            ->where(function ($q) use ($queryString) {
+        $baseQuery = Product::with(['images', 'categories'])
+            ->where('stock_status', Product::STOCK_STATUS_INSTOCK);
+
+        if ($queryString) {
+            // Si hay query, se filtra
+            $baseQuery->where(function ($q) use ($queryString) {
                 $q->where('name', 'LIKE', "%{$queryString}%")
                     ->orWhere('sku', 'LIKE', "%{$queryString}%")
                     ->orWhere('short_description', 'LIKE', "%{$queryString}%");
             });
-
-        // Si la request incluye ?page, usamos paginate
-        if ($request->has('page')) {
-            $products = $query->paginate(15); // puedes ajustar el número por página
         } else {
-            $products = $query->take(10)->get();
+            // Si no hay query, se ordena aleatoriamente
+            $baseQuery->inRandomOrder();
         }
+
+        $products = $baseQuery->paginate(15);
 
         return response()->json($products);
     }
