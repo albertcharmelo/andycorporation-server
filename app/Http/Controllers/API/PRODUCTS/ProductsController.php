@@ -164,7 +164,7 @@ class ProductsController extends Controller
     public function searchProducts(Request $request)
     {
         $request->validate([
-            'query' => 'nullable|string|max:255', // <-- ahora puede ser null
+            'query' => 'string|max:255', // <-- ahora puede ser null
             'page' => 'sometimes|integer|min:1',
         ]);
 
@@ -173,7 +173,7 @@ class ProductsController extends Controller
         $baseQuery = Product::with(['images', 'categories'])
             ->where('stock_status', Product::STOCK_STATUS_INSTOCK);
 
-        if ($queryString) {
+        if ($queryString && $queryString !== 'ramdom') {
             // Si hay query, se filtra
             $baseQuery->where(function ($q) use ($queryString) {
                 $q->where('name', 'LIKE', "%{$queryString}%")
