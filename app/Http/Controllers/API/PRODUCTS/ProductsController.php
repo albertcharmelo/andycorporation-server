@@ -165,6 +165,7 @@ class ProductsController extends Controller
     {
         $request->validate([
             'query' => 'required|string|max:255',
+            'page' => 'sometimes|integer|min:1',
         ]);
 
         $queryString = $request->input('query');
@@ -173,7 +174,7 @@ class ProductsController extends Controller
             ->where('stock_status', Product::STOCK_STATUS_INSTOCK)
             ->where(function ($q) use ($queryString) {
                 $q->where('name', 'LIKE', "%{$queryString}%")
-                    ->orWhere('description', 'LIKE', "%{$queryString}%")
+                    ->orWhere('sku', 'LIKE', "%{$queryString}%")
                     ->orWhere('short_description', 'LIKE', "%{$queryString}%");
             });
 
