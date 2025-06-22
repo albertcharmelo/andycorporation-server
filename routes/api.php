@@ -29,3 +29,8 @@ Route::prefix('products')->group(function () {
     ## Sincronizar con Wordpress
     Route::get('syncProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'syncProducts']);
 });
+
+## Categories
+Route::prefix('categories')->group(function () {
+    Route::get('/', [\App\Http\Controllers\API\PRODUCTS\CategoriesController::class, 'index']);
+});
