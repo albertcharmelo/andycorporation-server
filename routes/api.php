@@ -21,12 +21,12 @@ Route::prefix('auth')->group(function () {
 ## Products
 Route::prefix('products')->group(function () {
     Route::get('/', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'index']);
+    Route::get('/promo', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getPromotionalProducts']);
     Route::get('/listproducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getAllProducts']);
     Route::get('/searchByName', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'searchProducts']);
     Route::get('/popularProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getPopularProducts']);
     Route::get('/salesProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getSalesProducts']);
     Route::get('/{product}', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getProduct']);
-    Route::get('/promotionalProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getPromotionalProducts']);
     ## Sincronizar con Wordpress
     Route::get('syncProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'syncProducts']);
 });
