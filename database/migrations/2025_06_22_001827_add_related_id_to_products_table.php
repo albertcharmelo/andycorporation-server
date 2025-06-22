@@ -6,28 +6,24 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('product_related', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('product_id');
-            $table->unsignedBigInteger('related_product_id');
 
-            $table->foreign('product_id')->references('id')->on('products')->onDelete('cascade');
-            $table->foreign('related_product_id')->references('id')->on('products')->onDelete('cascade');
-
-            $table->unique(['product_id', 'related_product_id']); // evitar duplicados
+            // Usamos IDs de WooCommerce
+            $table->unsignedBigInteger('product_woocommerce_id');
+            $table->unsignedBigInteger('related_woocommerce_id');
 
             $table->timestamps();
+
+            // No se puede usar foreign key directa si no hay clave primaria en 'woocommerce_id'
+            // pero puedes indexarlos si quieres acelerar las búsquedas:
+            $table->index(['product_woocommerce_id']);
+            $table->index(['related_woocommerce_id']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('product_related');
