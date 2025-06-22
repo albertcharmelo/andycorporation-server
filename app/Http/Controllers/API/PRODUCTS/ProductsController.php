@@ -176,7 +176,13 @@ class ProductsController extends Controller
         if (!$product) {
             return response()->json(['message' => 'Producto no encontrado.'], 404);
         }
-        $product->load(['images', 'categories', 'relatedProducts']);
+        $product->load([
+            'images',
+            'categories',
+            'relatedProducts',
+            'relatedProducts.images',
+            'relatedProducts.categories'
+        ]);
 
 
         return response()->json($product);

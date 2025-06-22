@@ -47,6 +47,7 @@ class Product extends Model
 
 
     // Productos relacionados con este producto
+
     public function relatedProducts()
     {
         return $this->belongsToMany(
