@@ -236,6 +236,21 @@ class ProductsController extends Controller
         return response()->json($products);
     }
 
+    ## Promotional products
+    public function getPromotionalProducts()
+    {
+        $products = Product::with(['images', 'categories'])
+            ->where('stock_status', Product::STOCK_STATUS_INSTOCK)
+            ->whereNotNull('sale_price')
+            ->whereColumn('sale_price', '<', 'regular_price')
+            ->inRandomOrder() // para obtener productos aleatorios
+            ->take(20) // puedes ajustar la cantidad
+            ->get();
+
+        return response()->json([
+            'products' => $products,
+        ])->setStatusCode(200, 'OK');
+    }
     ## Get Popular products
     public function getPopularProducts()
     {

@@ -26,6 +26,7 @@ Route::prefix('products')->group(function () {
     Route::get('/popularProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getPopularProducts']);
     Route::get('/salesProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getSalesProducts']);
     Route::get('/{product}', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getProduct']);
+    Route::get('/promotionalProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getPromotionalProducts']);
     ## Sincronizar con Wordpress
     Route::get('syncProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'syncProducts']);
 });
