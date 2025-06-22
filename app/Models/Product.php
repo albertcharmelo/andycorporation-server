@@ -45,8 +45,26 @@ class Product extends Model
         return $this->belongsToMany(Category::class);
     }
 
+
+    // Productos relacionados con este producto
     public function relatedProducts()
     {
-        return $this->hasMany(Product::class, 'id', 'related_ids');
+        return $this->belongsToMany(
+            Product::class,
+            'product_related',
+            'product_id',
+            'related_product_id'
+        );
+    }
+
+    // Productos que tienen a este producto como relacionado (opcional)
+    public function relatedTo()
+    {
+        return $this->belongsToMany(
+            Product::class,
+            'product_related',
+            'related_product_id',
+            'product_id'
+        );
     }
 }

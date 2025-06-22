@@ -19,6 +19,8 @@ return new class extends Migration
             $table->foreign('product_id')->references('id')->on('products')->onDelete('cascade');
             $table->foreign('related_product_id')->references('id')->on('products')->onDelete('cascade');
 
+            $table->unique(['product_id', 'related_product_id']); // evitar duplicados
+
             $table->timestamps();
         });
     }
@@ -29,10 +31,5 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('product_related');
-        Schema::table('products', function (Blueprint $table) {
-            $table->dropForeign(['product_id']);
-            $table->dropForeign(['related_product_id']);
-            $table->dropColumn(['product_id', 'related_product_id']);
-        });
     }
 };

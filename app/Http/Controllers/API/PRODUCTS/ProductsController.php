@@ -41,9 +41,16 @@ class ProductsController extends Controller
                             'status' => $wooProduct->status,
                             'stock_quantity' => $wooProduct->stock_quantity,
                             'stock_status' => $wooProduct->stock_status,
-                            'related_ids' => is_array($wooProduct->related_ids) ? $wooProduct->related_ids : [],
+
                         ]
                     );
+
+                    // 🔁 Relacionar productos relacionados (si existen en WooCommerce)
+                    if (is_array($wooProduct->related_ids) && count($wooProduct->related_ids) > 0) {
+                        $product->relatedProducts()->sync($wooProduct->related_ids);
+                    } else {
+                        $product->relatedProducts()->sync([]); // Limpia relaciones si no hay
+                    }
 
                     // Sincronizar imágenes
                     $product->images()->delete();
