@@ -89,8 +89,10 @@ class ProductsController extends Controller
         if (!$wooProduct) {
             return response()->json(['message' => 'Producto no encontrado en WooCommerce.'], 404);
         }
+
         try {
             DB::transaction(function () use ($wooProduct) {
+                // Crear o actualizar producto principal
                 $product = Product::updateOrCreate(
                     ['woocommerce_id' => $wooProduct->id],
                     [
@@ -111,6 +113,7 @@ class ProductsController extends Controller
                     ]
                 );
 
+                // Sincronizar imágenes
                 $product->images()->delete();
                 foreach ($wooProduct->images as $image) {
                     $product->images()->create([
@@ -119,6 +122,7 @@ class ProductsController extends Controller
                     ]);
                 }
 
+                // Sincronizar categorías
                 $categoryIds = [];
                 foreach ($wooProduct->categories as $wooCategory) {
                     $category = Category::firstOrCreate(
@@ -128,6 +132,17 @@ class ProductsController extends Controller
                     $categoryIds[] = $category->id;
                 }
                 $product->categories()->sync($categoryIds);
+
+                // 🔁 Sincronizar productos relacionados (solo si existen en DB)
+                if (is_array($wooProduct->related_ids) && count($wooProduct->related_ids) > 0) {
+                    $existingWooIds = Product::whereIn('woocommerce_id', $wooProduct->related_ids)
+                        ->pluck('woocommerce_id')
+                        ->toArray();
+
+                    $product->relatedProducts()->sync($existingWooIds);
+                } else {
+                    $product->relatedProducts()->sync([]);
+                }
             });
 
             return response()->json(['message' => 'Producto sincronizado correctamente.']);

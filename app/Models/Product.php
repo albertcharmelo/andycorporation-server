@@ -52,19 +52,23 @@ class Product extends Model
         return $this->belongsToMany(
             Product::class,
             'product_related',
-            'product_id',
-            'related_product_id'
+            'product_woocommerce_id',
+            'related_woocommerce_id',
+            'woocommerce_id',
+            'woocommerce_id'
         );
     }
 
-    // Productos que tienen a este producto como relacionado (opcional)
+    // Productos que tienen a este producto como relacionado
     public function relatedTo()
     {
         return $this->belongsToMany(
             Product::class,
             'product_related',
-            'related_product_id',
-            'product_id'
+            'related_woocommerce_id',
+            'product_woocommerce_id',
+            'woocommerce_id', // clave local
+            'woocommerce_id'  // clave remota
         );
     }
 }
