@@ -12,6 +12,10 @@ class Product extends Model
     public const STOCK_STATUS_ONBACKORDER = 'onbackorder';
 
 
+    protected $casts = [
+        'related_ids' => 'array',
+    ];
+
     protected $fillable = [
         'woocommerce_id',
         'name',
@@ -28,6 +32,7 @@ class Product extends Model
         'total_sales',
         'average_rating',
         'rating_count',
+        'related_ids'
     ];
 
     public function images()
@@ -38,5 +43,10 @@ class Product extends Model
     public function categories()
     {
         return $this->belongsToMany(Category::class);
+    }
+
+    public function relatedProducts()
+    {
+        return $this->hasMany(Product::class, 'id', 'related_ids');
     }
 }

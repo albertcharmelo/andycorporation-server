@@ -41,6 +41,7 @@ class ProductsController extends Controller
                             'status' => $wooProduct->status,
                             'stock_quantity' => $wooProduct->stock_quantity,
                             'stock_status' => $wooProduct->stock_status,
+                            'related_ids' => is_array($wooProduct->related_ids) ? $wooProduct->related_ids : [],
                         ]
                     );
 
