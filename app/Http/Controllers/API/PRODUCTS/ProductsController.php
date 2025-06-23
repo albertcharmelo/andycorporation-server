@@ -204,8 +204,7 @@ class ProductsController extends Controller
         if (!empty($queryString)) {
             $baseQuery->where(function ($q) use ($queryString) {
                 $q->where('name', 'LIKE', "%{$queryString}%")
-                    ->orWhere('sku', 'LIKE', "%{$queryString}%")
-                    ->orWhere('short_description', 'LIKE', "%{$queryString}%");
+                    ->orWhere('sku', 'LIKE', "%{$queryString}%");
             });
         } else {
             $baseQuery->inRandomOrder();
