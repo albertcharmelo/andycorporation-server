@@ -255,11 +255,11 @@ class ProductsController extends Controller
     {
         $products = Product::with(['images', 'categories'])
             ->orderBy('average_rating', 'desc')
-            ->take(10)
+            ->inRandomOrder() // para obtener productos aleatorios
+            ->take(20)
             ->get();
         return response()->json([
-            'products' => $products,
-            'message' => 'Productos más vendidos obtenidos correctamente.'
+            'products' => $products
         ])->setStatusCode(200, 'OK');
     }
 
@@ -268,12 +268,12 @@ class ProductsController extends Controller
     {
         $products = Product::with(['images', 'categories'])
             ->orderBy('total_sales', 'desc')
-            ->take(10)
+            ->inRandomOrder() // para obtener productos aleatorios
+            ->take(20)
             ->get();
 
         return response()->json([
             'products' => $products,
-            'message' => 'Productos en oferta obtenidos correctamente.'
         ])->setStatusCode(200, 'OK');
     }
 }
