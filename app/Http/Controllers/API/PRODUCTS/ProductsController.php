@@ -193,48 +193,66 @@ class ProductsController extends Controller
     public function searchProducts(Request $request)
     {
         $request->validate([
-            'query' => 'nullable|string|max:255', // << permite que sea null
+            'query' => 'nullable|string|max:255',
             'page' => 'sometimes|integer|min:1',
             'filters' => 'nullable|array',
-            'filters.price.min' => 'nullable|string',
-            'filters.price.max' => 'nullable|string',
+            'filters.price.min' => 'nullable|numeric|min:0',
+            'filters.price.max' => 'nullable|numeric|min:0',
             'filters.orderBy' => 'nullable|string|in:relevancia,menor_precio,mayor_precio',
         ]);
-        $queryString = $request->input('query');
+
+        ## Obtener los parámetros de búsqueda y filtros
+        $queryString = $request->input('query', '');
+        $filters = $request->input('filters', []);
 
         $baseQuery = Product::with(['images', 'categories'])
             ->where('stock_status', Product::STOCK_STATUS_INSTOCK);
 
-        $orderBy = 'relevancia'; // Valor por defecto
-        if ($request->has('filters.orderBy')) {
-            if ($request->input('filters.orderBy') === 'menor_precio') {
-                $baseQuery->orderBy('price', 'asc');
-            } elseif ($request->input('filters.orderBy') === 'mayor_precio') {
-                $baseQuery->orderBy('price', 'desc');
-            } else {
-                $baseQuery->orderBy('woocommerce_id', 'desc'); // Por defecto, ordena por ID
-            }
-        }
-
-
-        if (!empty($queryString)) {
+        ## Si hay un término de búsqueda, aplicarlo
+        if ($queryString !== '') {
             $baseQuery->where(function ($q) use ($queryString) {
                 $q->where('name', 'LIKE', "%{$queryString}%")
                     ->orWhere('sku', 'LIKE', "%{$queryString}%");
-            })
-                ->when($request->input('filters'), function ($q) use ($request, $orderBy) {
-                    $filters = $request->input('filters');
-                    if (isset($filters['price'])) {
-                        $q->whereBetween('price', [$filters['price']['min'], $filters['price']['max']]);
-                    }
-                    if (isset($filters['orderBy'])) {
-                        $q->orderBy($orderBy);
-                    }
-                });
+            });
         } else {
             $baseQuery->inRandomOrder();
         }
-        $products = $baseQuery->paginate(15);
+
+        ## Filtros
+        $baseQuery
+            ->when(isset($filters['price']['min']) || isset($filters['price']['max']), function ($q) use ($filters) { ## Filtrar por precio
+                ## Si se especifica un rango de precios, aplicar el filtro
+                $min = isset($filters['price']['min']) && $filters['price']['min'] !== ''
+                    ? (float) $filters['price']['min']
+                    : null;
+                $max = isset($filters['price']['max']) && $filters['price']['max'] !== ''
+                    ? (float) $filters['price']['max']
+                    : null;
+
+                ## Aplicar el filtro de precio
+                if (!is_null($min) && !is_null($max)) {
+                    $q->whereBetween('price', [$min, $max]);
+                } elseif (!is_null($min)) {
+                    $q->where('price', '>=', $min);
+                } elseif (!is_null($max)) {
+                    $q->where('price', '<=', $max);
+                }
+            })
+            ## Ordenar productos
+            ->when(isset($filters['orderBy']), function ($q) use ($filters) {
+                switch ($filters['orderBy']) {
+                    case 'menor_precio':
+                        $q->orderBy('price', 'asc');
+                        break;
+                    case 'mayor_precio':
+                        $q->orderBy('price', 'desc');
+                        break;
+                    default:
+                        $q->orderBy('woocommerce_id', 'desc');
+                }
+            });
+
+        $products = $baseQuery->paginate(20);
 
         return response()->json($products);
     }
