@@ -195,17 +195,42 @@ class ProductsController extends Controller
         $request->validate([
             'query' => 'nullable|string|max:255', // << permite que sea null
             'page' => 'sometimes|integer|min:1',
+            'filters' => 'nullable|array',
+            'filters.price.min' => 'nullable|string',
+            'filters.price.max' => 'nullable|string',
+            'filters.orderBy' => 'nullable|string|in:relevancia,menor_precio,mayor_precio',
         ]);
         $queryString = $request->input('query');
 
         $baseQuery = Product::with(['images', 'categories'])
             ->where('stock_status', Product::STOCK_STATUS_INSTOCK);
 
+        $orderBy = 'relevancia'; // Valor por defecto
+        if ($request->has('filters.orderBy')) {
+            if ($request->input('filters.orderBy') === 'menor_precio') {
+                $baseQuery->orderBy('price', 'asc');
+            } elseif ($request->input('filters.orderBy') === 'mayor_precio') {
+                $baseQuery->orderBy('price', 'desc');
+            } else {
+                $baseQuery->orderBy('woocommerce_id', 'desc'); // Por defecto, ordena por ID
+            }
+        }
+
+
         if (!empty($queryString)) {
             $baseQuery->where(function ($q) use ($queryString) {
                 $q->where('name', 'LIKE', "%{$queryString}%")
                     ->orWhere('sku', 'LIKE', "%{$queryString}%");
-            });
+            })
+                ->when($request->input('filters'), function ($q) use ($request, $orderBy) {
+                    $filters = $request->input('filters');
+                    if (isset($filters['price'])) {
+                        $q->whereBetween('price', [$filters['price']['min'], $filters['price']['max']]);
+                    }
+                    if (isset($filters['orderBy'])) {
+                        $q->orderBy($orderBy);
+                    }
+                });
         } else {
             $baseQuery->inRandomOrder();
         }
