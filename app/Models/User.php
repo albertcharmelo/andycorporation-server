@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -14,7 +13,6 @@ class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, HasApiTokens, HasRoles, SoftDeletes;
-
 
     protected $guard_name = 'api';
 
@@ -53,7 +51,17 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'password'          => 'hashed',
         ];
+    }
+
+    /**
+     * Obtener los tems del carrito de un usuario.
+     *
+     * @return array<string, string>
+     */
+    public function cartItems()
+    {
+        return $this->hasMany(CartItem::class);
     }
 }
