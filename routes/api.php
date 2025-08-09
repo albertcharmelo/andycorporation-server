@@ -1,16 +1,16 @@
 <?php
 
 use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\CartController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/user', function (Request $request) {
     return [
-        'user' => $request->user(),
+        'user'    => $request->user(),
         'message' => 'Welcome to the API',
     ];
 })->middleware('auth:sanctum');
-
 
 ## Auth
 Route::prefix('auth')->group(function () {
@@ -34,4 +34,19 @@ Route::prefix('products')->group(function () {
 ## Categories
 Route::prefix('categories')->group(function () {
     Route::get('/', [\App\Http\Controllers\API\PRODUCTS\CategoriesController::class, 'index']);
+});
+
+Route::group(['middleware' => ['auth:sanctum']], function () {
+
+    /*******************************/
+    /*       carts           */
+    /*******************************/
+    Route::prefix('cart')->group(function () {                         // Rutas para el Módulo del Carrito
+        Route::post('/add', [CartController::class, 'addProduct']);        // Añadir producto
+        Route::post('/update', [CartController::class, 'updateQuantity']); // Actualizar cantidad
+        Route::post('/remove', [CartController::class, 'removeProduct']);  // Eliminar producto
+        Route::get('/', [CartController::class, 'showCart']);              // Mostrar carrito
+                                                                           // Route::put('/update/{productId}', [CartController::class, 'updateQuantity']);   // Actualizar cantidad
+                                                                           // Route::delete('/remove/{productId}', [CartController::class, 'removeProduct']); // Eliminar producto
+    });
 });
