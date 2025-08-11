@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\AddressController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CartController;
 use Illuminate\Http\Request;
@@ -49,4 +50,20 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
                                                                            // Route::put('/update/{productId}', [CartController::class, 'updateQuantity']);   // Actualizar cantidad
                                                                            // Route::delete('/remove/{productId}', [CartController::class, 'removeProduct']); // Eliminar producto
     });
+
+    /*******************************/
+    /* Direcciones y Envío         */
+    /*******************************/
+    Route::prefix('addresses')->group(function () {
+        Route::post('/add', [AddressController::class, 'store']);                          // Guardar nueva dirección
+        Route::get('/', [AddressController::class, 'index']);                              // Mostrar todas las direcciones guardadas
+        Route::get('/{addressId}', [AddressController::class, 'show']);                    // Mostrar una dirección específica
+        Route::put('/{addressId}', [AddressController::class, 'update']);                  // Actualizar una dirección
+        Route::delete('/{addressId}', [AddressController::class, 'destroy']);              // Eliminar una dirección
+        Route::post('/{addressId}/set-default', [AddressController::class, 'setDefault']); // Establecer como predeterminada
+    });
+
+    // Ruta para calcular costo de envío (puede ir fuera del prefix 'addresses' si es general)
+    Route::post('/shipping-cost', [AddressController::class, 'calculateShippingCost']);
+
 });
