@@ -13,6 +13,7 @@ class UserAddress extends Model
         'user_id',
         'address_line_1',
         'address_line_2',
+        'name',
         'referencia',
         'postal_code',
         'is_default',
