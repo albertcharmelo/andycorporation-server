@@ -3,6 +3,7 @@
 use App\Http\Controllers\API\AddressController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CartController;
+use App\Http\Controllers\API\CheckoutController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -61,6 +62,18 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
         Route::put('/{addressId}', [AddressController::class, 'update']);                  // Actualizar una dirección
         Route::delete('/{addressId}', [AddressController::class, 'destroy']);              // Eliminar una dirección
         Route::post('/{addressId}/set-default', [AddressController::class, 'setDefault']); // Establecer como predeterminada
+    });
+
+    // **********************************
+    // * Rutas del Módulo de Checkout y Pago (NUEVAS) *
+    // **********************************
+    Route::prefix('checkout')->group(function () {
+        // Crear Orden y Generar Referencia de Pago
+        Route::post('/create-order', [CheckoutController::class, 'createOrder']);
+        // Módulo de Confirmación: Mostrar resumen de una orden
+        Route::get('/order-summary/{orderId}', [CheckoutController::class, 'showOrderSummary']);
+        // Ruta para confirmar el pago.
+        Route::post('/confirm-payment/{orderId}', [CheckoutController::class, 'confirmPayment']);
     });
 
     // Ruta para calcular costo de envío (puede ir fuera del prefix 'addresses' si es general)
