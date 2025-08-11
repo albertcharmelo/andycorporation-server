@@ -15,6 +15,7 @@ class AddressController extends Controller
         $request->validate([
             'address_line_1' => 'required|string|max:255',
             'address_line_2' => 'nullable|string|max:255',
+            'referencia'     => 'nullable|string|max:255',
             'postal_code'    => 'nullable|string|max:20',
             'is_default'     => 'boolean',
             'latitude'       => 'nullable|numeric|between:-90,90',   // Validación para latitud
@@ -76,6 +77,7 @@ class AddressController extends Controller
         $request->validate([
             'address_line_1' => 'sometimes|required|string|max:255',
             'address_line_2' => 'nullable|string|max:255',
+            'referencia'     => 'nullable|string|max:255',
             'postal_code'    => 'nullable|string|max:20',
             'is_default'     => 'boolean',
             'latitude'       => 'nullable|numeric|between:-90,90',   // Validación para latitud
@@ -154,5 +156,5 @@ class AddressController extends Controller
             return response()->json(['message' => 'Error al establecer la dirección predeterminada: ' . $e->getMessage()], 500);
         }
     }
-    
+
 }
