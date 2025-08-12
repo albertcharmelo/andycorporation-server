@@ -4,6 +4,9 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PaymentProof;
+
+
 use App\Models\UserAddress; // Para validar la dirección de envío
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +30,7 @@ class CheckoutController extends Controller
             'address_id'     => 'required|exists:user_addresses,id',  // Debe ser una dirección existente
             'payment_method' => 'required|string|in:manual_transfer', // Método de pago esperado
             'notes'          => 'nullable|string|max:1000',
+            'payment_proof'  => 'required|file|image|max:2048', // 2048 KB = 2MB
         ]);
 
         $user = $request->user();
@@ -88,7 +92,21 @@ class CheckoutController extends Controller
                 ]);
             }
 
-            // Vaciar el carrito después de crear la orden
+            // 5. Subir y guardar el comprobante de pago
+            if ($request->hasFile('payment_proof')) {
+                // Guarda la imagen en el disco público y obtiene la ruta
+                // La imagen se guardará en storage/app/public/payment_proofs
+                $filePath = $request->file('payment_proof')->store('payment_proofs', 'public');
+
+                // Registra la información del comprobante en la nueva tabla
+                PaymentProof::create([
+                    'order_id'  => $order->id,
+                    'file_path' => $filePath,
+                    'notes'     => $request->notes,
+                ]);
+            }
+
+            // 5. Vaciar el carrito después de crear la orden
             $user->cartItems()->delete();
 
             DB::commit();
