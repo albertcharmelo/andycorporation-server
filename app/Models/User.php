@@ -77,4 +77,20 @@ class User extends Authenticatable
     {
         return $this->hasMany(Order::class);
     }
+
+    /**
+     * Un delivery puede tener muchas órdenes asignadas.
+     */
+    public function assignedOrders()
+    {
+        return $this->hasMany(Order::class, 'delivery_id');
+    }
+
+    /**
+     * Un usuario puede enviar muchos mensajes.
+     */
+    public function messages()
+    {
+        return $this->hasMany(Message::class);
+    }
 }

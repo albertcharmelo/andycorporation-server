@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\API\AddressController;
+use App\Http\Controllers\API\Admin\ChatController;
+use App\Http\Controllers\API\Admin\DeliveryController;
+use App\Http\Controllers\API\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CheckoutController;
@@ -78,5 +81,40 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
 
     // Ruta para calcular costo de envío (puede ir fuera del prefix 'addresses' si es general)
     Route::post('/shipping-cost', [AddressController::class, 'calculateShippingCost']);
+});
 
+// **********************************
+// * Rutas de Administración (Admin Panel) *
+// **********************************
+Route::group(['middleware' => ['auth:sanctum', 'role:admin,super_admin'], 'prefix' => 'admin'], function () {
+
+    // Gestión de Órdenes
+    Route::prefix('orders')->group(function () {
+        Route::get('/', [AdminOrderController::class, 'index']);                           // Listar todas las órdenes con filtros
+        Route::get('/statistics', [AdminOrderController::class, 'statistics']);            // Estadísticas de órdenes
+        Route::get('/{id}', [AdminOrderController::class, 'show']);                        // Ver detalle de orden
+        Route::put('/{id}/status', [AdminOrderController::class, 'updateStatus']);         // Actualizar estado
+        Route::put('/{id}/notes', [AdminOrderController::class, 'updateNotes']);           // Actualizar notas internas
+        Route::get('/{id}/payment-proof', [AdminOrderController::class, 'viewPaymentProof']); // Ver comprobante de pago
+        Route::delete('/{id}', [AdminOrderController::class, 'destroy']);                  // Eliminar orden
+        Route::get('/user/{userId}', [AdminOrderController::class, 'getUserOrders']);      // Órdenes de un usuario
+    });
+
+    // Gestión de Deliveries
+    Route::prefix('deliveries')->group(function () {
+        Route::get('/', [DeliveryController::class, 'index']);                             // Listar todos los deliveries
+        Route::post('/', [DeliveryController::class, 'store']);                            // Crear nuevo delivery
+        Route::post('/assign/{orderId}', [DeliveryController::class, 'assignToOrder']);    // Asignar delivery a orden
+        Route::delete('/unassign/{orderId}', [DeliveryController::class, 'unassignFromOrder']); // Desasignar delivery
+        Route::get('/{deliveryId}/orders', [DeliveryController::class, 'getOrders']);      // Órdenes de un delivery
+        Route::delete('/{id}', [DeliveryController::class, 'destroy']);                    // Eliminar delivery
+    });
+
+    // Chat de Órdenes
+    Route::prefix('chat')->group(function () {
+        Route::get('/{orderId}/messages', [ChatController::class, 'getMessages']);         // Obtener mensajes de una orden
+        Route::post('/{orderId}/messages', [ChatController::class, 'sendMessage']);        // Enviar mensaje
+        Route::post('/{orderId}/read', [ChatController::class, 'markAsRead']);             // Marcar como leído
+        Route::get('/{orderId}/unread', [ChatController::class, 'getUnreadCount']);        // Contar no leídos
+    });
 });

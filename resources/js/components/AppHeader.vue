@@ -16,9 +16,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { getInitials } from '@/composables/useInitials';
-import type { BreadcrumbItem, NavItem } from '@/types';
+import type { BreadcrumbItem, NavItem, SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-vue-next';
+import { BookOpen, ClipboardList, Folder, LayoutGrid, Menu, Search, Truck } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 interface Props {
@@ -29,7 +29,7 @@ const props = withDefaults(defineProps<Props>(), {
     breadcrumbs: () => [],
 });
 
-const page = usePage();
+const page = usePage<SharedData>();
 const auth = computed(() => page.props.auth);
 
 const isCurrentRoute = computed(() => (url: string) => page.url === url);
@@ -38,13 +38,33 @@ const activeItemStyles = computed(
     () => (url: string) => (isCurrentRoute.value(url) ? 'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : ''),
 );
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: '/dashboard',
-        icon: LayoutGrid,
-    },
-];
+const mainNavItems = computed<NavItem[]>(() => {
+    const items: NavItem[] = [
+        {
+            title: 'Dashboard',
+            href: '/dashboard',
+            icon: LayoutGrid,
+        },
+    ];
+
+    // Agregar opciones de admin si el usuario tiene el rol
+    if (auth.value.user?.is_admin) {
+        items.push(
+            {
+                title: 'Gestión de Órdenes',
+                href: '/admin/orders',
+                icon: ClipboardList,
+            },
+            {
+                title: 'Deliveries',
+                href: '/admin/deliveries',
+                icon: Truck,
+            }
+        );
+    }
+
+    return items;
+});
 
 const rightNavItems: NavItem[] = [
     {
@@ -62,7 +82,7 @@ const rightNavItems: NavItem[] = [
 
 <template>
     <div>
-        <div class="border-b border-sidebar-border/80">
+        <div class="border-b-2 corporate-navbar" style="border-bottom-color: #0b3c87;">
             <div class="mx-auto flex h-16 items-center px-4 md:max-w-7xl">
                 <!-- Mobile Menu -->
                 <div class="lg:hidden">
@@ -191,3 +211,22 @@ const rightNavItems: NavItem[] = [
         </div>
     </div>
 </template>
+
+<style scoped>
+.corporate-navbar {
+    background-color: white;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+}
+
+:deep(.navigation-menu-link[data-active="true"]) {
+    color: #0b3c87 !important;
+}
+
+:deep(.navigation-menu-link:hover) {
+    color: #0b3c87;
+}
+
+.dark .corporate-navbar {
+    background-color: hsl(var(--background));
+}
+</style>
