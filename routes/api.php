@@ -7,6 +7,7 @@ use App\Http\Controllers\API\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CheckoutController;
+use App\Http\Controllers\API\Delivery\OrderController as DeliveryOrderController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -116,5 +117,14 @@ Route::group(['middleware' => ['auth:sanctum', 'role:admin,super_admin'], 'prefi
         Route::post('/{orderId}/messages', [ChatController::class, 'sendMessage']);        // Enviar mensaje
         Route::post('/{orderId}/read', [ChatController::class, 'markAsRead']);             // Marcar como leído
         Route::get('/{orderId}/unread', [ChatController::class, 'getUnreadCount']);        // Contar no leídos
+    });
+});
+
+// **********************************
+// * Rutas de Delivery *
+// **********************************
+Route::group(['middleware' => ['auth:sanctum', 'role:delivery'], 'prefix' => 'delivery'], function () {
+    Route::prefix('orders')->group(function () {
+        Route::get('/', [DeliveryOrderController::class, 'index']);                        // Listar órdenes asignadas al delivery
     });
 });
