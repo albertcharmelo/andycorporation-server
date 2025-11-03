@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-
+use Illuminate\Support\Facades\Auth;
 class OrderChatController extends Controller
 {
     /**
@@ -24,11 +24,11 @@ class OrderChatController extends Controller
      * @param int $orderId
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getMessages($orderId)
+    public function getMessages(Request $request, $orderId)
     {
         try {
-            $user = auth()->user();
-            
+            $user = Auth::guard('sanctum')->user();
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -83,7 +83,7 @@ class OrderChatController extends Controller
      */
     public function sendMessage(Request $request, $orderId)
     {
-        $user = auth()->user();
+        $user = $request->user();
         
         if (!$user) {
             return response()->json([
@@ -152,10 +152,16 @@ class OrderChatController extends Controller
 
             $message->load('user:id,name,email,avatar');
 
-            // Dispatch job para broadcasting asíncrono
-            dispatch(new BroadcastOrderMessage($message, $user, $order));
-
             DB::commit();
+
+            // Disparar evento de broadcasting inmediatamente (sincrónico para tiempo real)
+            try {
+                \Log::info('Disparando evento OrderMessageSent para orden: ' . $orderId);
+                event(new OrderMessageSent($message, $user, $order));
+                \Log::info('Evento OrderMessageSent disparado exitosamente');
+            } catch (\Exception $e) {
+                \Log::error('Error al disparar evento OrderMessageSent: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'message' => 'Mensaje enviado exitosamente',
@@ -181,7 +187,7 @@ class OrderChatController extends Controller
     public function markAsRead(Request $request, $orderId)
     {
         try {
-            $user = auth()->user();
+            $user = $request->user();
             $order = Order::findOrFail($orderId);
 
             // Verificar permisos
@@ -227,11 +233,11 @@ class OrderChatController extends Controller
      * @param int $orderId
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getStats($orderId)
+    public function getStats(Request $request, $orderId)
     {
         try {
             $order = Order::findOrFail($orderId);
-            $user = auth()->user();
+            $user = $request->user();
             
             $userRole = $this->getUserRole($user, $order);
             if (!$this->canAccessOrder($user, $order, $userRole)) {
@@ -286,7 +292,7 @@ class OrderChatController extends Controller
      * @param int $messageId
      * @return \Illuminate\Http\Response|\Illuminate\Http\JsonResponse
      */
-    public function getAttachment($orderId, $messageId)
+    public function getAttachment(Request $request, $orderId, $messageId)
     {
         try {
             $message = Message::where('order_id', $orderId)
@@ -299,7 +305,7 @@ class OrderChatController extends Controller
                 ], 404);
             }
 
-            $user = auth()->user();
+            $user = $request->user();
             $order = $message->order;
             
             // Verificar permisos

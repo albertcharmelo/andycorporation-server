@@ -10,10 +10,11 @@ use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class OrderMessageSent implements ShouldBroadcast
+class OrderMessageSent implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -38,6 +39,13 @@ class OrderMessageSent implements ShouldBroadcast
             'user_id' => $order->user_id,
             'delivery_id' => $order->delivery_id,
         ];
+        
+        // Log para debug
+        \Log::info('OrderMessageSent creado', [
+            'order_id' => $order->id,
+            'message_id' => $message->id,
+            'channel' => 'private-order.' . $order->id,
+        ]);
     }
 
     /**
@@ -48,7 +56,7 @@ class OrderMessageSent implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('order.' . $this->order['id']),
+            new PrivateChannel('private-order.' . $this->order['id']),
         ];
     }
 

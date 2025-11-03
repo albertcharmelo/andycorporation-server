@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Delivery;
 
 use App\Http\Controllers\Controller;
+use App\Events\DeliveryLocationUpdated;
 use App\Models\DeliveryLocation;
 use App\Models\Order;
 use Illuminate\Http\Request;
@@ -254,8 +255,8 @@ class OrderController extends Controller
                 ], 403);
             }
 
-            // Validar que el estado sea on_the_way
-            if ($order->status !== 'on_the_way') {
+            // Validar que el estado permita actualización de ubicación
+            if (!in_array($order->status, ['shipped', 'on_the_way'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Solo se puede actualizar la ubicación cuando el pedido está en camino',
@@ -278,7 +279,13 @@ class OrderController extends Controller
                 'location_updated_at' => now(),
             ]);
 
+            // Recargar orden con datos actualizados
+            $order->refresh();
+
             DB::commit();
+
+            // Emitir evento de actualización de ubicación vía Pusher
+            event(new DeliveryLocationUpdated($location, $order));
 
             return response()->json([
                 'message' => 'Ubicación actualizada exitosamente',

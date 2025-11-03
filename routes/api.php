@@ -10,6 +10,7 @@ use App\Http\Controllers\API\CheckoutController;
 use App\Http\Controllers\API\Delivery\OrderController as DeliveryOrderController;
 use App\Http\Controllers\API\OrderChatController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/user', function (Request $request) {
@@ -19,11 +20,16 @@ Route::get('/user', function (Request $request) {
     ];
 })->middleware('auth:sanctum');
 
+// Ruta de autenticación de broadcasting para Pusher con Sanctum
+// Laravel maneja automáticamente la autenticación usando routes/channels.php
+Broadcast::routes(['middleware' => ['auth:sanctum']], ['prefix' => 'api']);
+
 ## Auth
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
 });
+
 
 ## Products
 Route::prefix('products')->group(function () {
@@ -85,14 +91,16 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/shipping-cost', [AddressController::class, 'calculateShippingCost']);
 
     // **********************************
-    // * Rutas de Chat de Órdenes *
+    // * Rutas de Órdenes del Usuario *
     // **********************************
     Route::prefix('orders')->group(function () {
-        Route::get('/{orderId}/chat', [OrderChatController::class, 'getMessages']);                      // Obtener mensajes
-        Route::post('/{orderId}/chat', [OrderChatController::class, 'sendMessage']);                     // Enviar mensaje
-        Route::put('/{orderId}/chat/mark-read', [OrderChatController::class, 'markAsRead']);            // Marcar como leído
-        Route::get('/{orderId}/chat/stats', [OrderChatController::class, 'getStats']);                  // Estadísticas del chat
-        Route::get('/{orderId}/chat/attachment/{messageId}', [OrderChatController::class, 'getAttachment']); // Descargar archivo adjunto
+        Route::get('/', [CheckoutController::class, 'getUserOrders']);                              // Listar órdenes del usuario
+        Route::get('/{orderId}', [CheckoutController::class, 'getUserOrderDetail']);                 // Detalle de una orden
+        Route::get('/{orderId}/chats', [OrderChatController::class, 'getMessages']);                  // Obtener mensajes
+        Route::post('/{orderId}/chats', [OrderChatController::class, 'sendMessage']);                  // Enviar mensaje
+        Route::put('/{orderId}/chats/mark-read', [OrderChatController::class, 'markAsRead']);        // Marcar como leído
+        Route::get('/{orderId}/chats/stats', [OrderChatController::class, 'getStats']);               // Estadísticas del chat
+        Route::get('/{orderId}/chats/attachment/{messageId}', [OrderChatController::class, 'getAttachment']); // Descargar archivo adjunto
     });
 });
 

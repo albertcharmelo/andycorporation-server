@@ -10,9 +10,6 @@ use App\Models\PaymentProof;
 use App\Models\UserAddress; // Para validar la dirección de envío
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-
-// Para generar la referencia de pago
 
 class CheckoutController extends Controller
 {
@@ -27,10 +24,11 @@ class CheckoutController extends Controller
     {
         // Validar los datos de la solicitud
         $request->validate([
-            'address_id'     => 'required|exists:user_addresses,id',  // Debe ser una dirección existente
-            'payment_method' => 'required|string|in:manual_transfer', // Método de pago esperado
-            'notes'          => 'nullable|string|max:1000',
-            'payment_proof'  => 'required|file|image|max:2048', // 2048 KB = 2MB
+            'address_id'        => 'required|exists:user_addresses,id',  // Debe ser una dirección existente
+            'payment_method'    => 'required|string|in:manual_transfer', // Método de pago esperado
+            'payment_reference' => 'required|string|max:255|unique:orders,payment_reference', // Referencia de pago obligatoria (transferencia bancaria del usuario)
+            'notes'             => 'nullable|string|max:1000', // Notas adicionales opcionales
+            'payment_proof'    => 'required|file|image|max:2048', // 2048 KB = 2MB
         ]);
 
         $user = $request->user();
@@ -61,11 +59,8 @@ class CheckoutController extends Controller
         try {
             DB::beginTransaction();
 
-            // 2. Generar referencia de pago
-            // 1. Generar la referencia de pago
-            $paymentReference = Str::upper(Str::random(10));
-
             // 2. Crear una nueva instancia de la orden
+            // payment_reference viene del frontend (referencia de transferencia bancaria del usuario)
             $order = new Order([
                 'user_id'           => $user->id,
                 'address_id'        => $request->address_id,
@@ -73,7 +68,7 @@ class CheckoutController extends Controller
                 'shipping_cost'     => $shippingCost,
                 'total'             => $total,
                 'payment_method'    => $request->payment_method,
-                'payment_reference' => $paymentReference,
+                'payment_reference' => $request->payment_reference, // Referencia de pago proporcionada por el usuario
                 'status'            => 'pending_payment',
                 'notes'             => $request->notes,
             ]);
@@ -200,6 +195,83 @@ class CheckoutController extends Controller
             DB::rollBack();
             return response()->json(['message' => 'Error al confirmar el pago: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Obtener las órdenes del usuario autenticado.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getUserOrders(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'No autenticado',
+            ], 401);
+        }
+
+        // Obtener parámetros opcionales para filtros
+        $status = $request->query('status'); // Filtrar por estado
+        $perPage = $request->query('per_page', 15); // Paginación
+
+        // Consulta base con relaciones
+        $query = $user->orders()
+            ->with(['items.product', 'address'])
+            ->orderBy('created_at', 'desc');
+
+        // Aplicar filtro de estado si se proporciona
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        // Paginar resultados
+        $orders = $query->paginate($perPage);
+
+        return response()->json([
+            'message' => 'Órdenes obtenidas exitosamente.',
+            'orders'  => $orders->items(),
+            'pagination' => [
+                'current_page' => $orders->currentPage(),
+                'last_page'    => $orders->lastPage(),
+                'per_page'     => $orders->perPage(),
+                'total'        => $orders->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * Obtener el detalle de una orden específica del usuario.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $orderId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getUserOrderDetail(Request $request, $orderId)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'No autenticado',
+            ], 401);
+        }
+
+        // Buscar la orden por ID y asegurarse de que pertenece al usuario
+        $order = $user->orders()
+            ->with(['items.product', 'address', 'paymentProof'])
+            ->find($orderId);
+
+        if (! $order) {
+            return response()->json(['message' => 'Orden no encontrada o no te pertenece.'], 404);
+        }
+
+        return response()->json([
+            'message' => 'Detalle de la orden.',
+            'order'   => $order->toArray(),
+        ]);
     }
 
 }

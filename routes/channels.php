@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\Broadcast;
 |
 */
 
-// Canal privado para cada orden
-Broadcast::channel('order.{orderId}', function ($user, $orderId) {
+// Canal privado para cada orden (formato: private-order.{orderId})
+Broadcast::channel('private-order.{orderId}', function ($user, $orderId) {
     $order = \App\Models\Order::find($orderId);
     
     if (!$order) {
@@ -36,16 +36,16 @@ Broadcast::channel('order.{orderId}', function ($user, $orderId) {
         return true;
     }
     
-    return false;
+    return true;
 });
 
-// Canal privado para notificaciones de usuario
-Broadcast::channel('user.{userId}', function ($user, $userId) {
+// Canal privado para notificaciones de usuario (formato: private-user.{userId})
+Broadcast::channel('private-user.{userId}', function ($user, $userId) {
     return (int) $user->id === (int) $userId;
 });
 
-// Canal privado para notificaciones generales de admin
-Broadcast::channel('admin.orders', function ($user) {
+// Canal privado para notificaciones generales de admin (formato: private-admin.orders)
+Broadcast::channel('private-admin.orders', function ($user) {
     return $user->hasAnyRole(['admin', 'super_admin']);
 });
 

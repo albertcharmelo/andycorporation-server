@@ -274,25 +274,41 @@ const setupPusher = () => {
         return;
     }
     
+    // Obtener token si está disponible (para API) o usar sesión web
+    const apiToken = localStorage.getItem('api_token');
+    const authHeaders: any = {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+    };
+    
+    // Si hay token, agregarlo al header
+    if (apiToken) {
+        authHeaders['Authorization'] = `Bearer ${apiToken}`;
+    }
+    
     const pusher = new Pusher(pusherKey, {
         cluster: pusherCluster,
         encrypted: true,
-        authEndpoint: '/broadcasting/auth',
+        authEndpoint: apiToken ? '/api/broadcasting/auth' : '/broadcasting/auth', // Usar API si hay token, sino sesión web
         auth: {
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
+            headers: authHeaders,
         },
-        // Habilitar envío de cookies (session)
+        // Habilitar envío de cookies (session) para autenticación web
         enabledTransports: ['ws', 'wss'],
     });
     
     const channel = pusher.subscribe(`private-order.${props.order.id}`);
     pusherChannel.value = channel;
     
+    // Escuchar todos los eventos del canal para debug
+    channel.bind_global((eventName: string, data: any) => {
+        console.log('[Vue Pusher] Evento global recibido:', eventName, data);
+    });
+    
     channel.bind('order.message.sent', (data: any) => {
-        if (data.message) {
+        console.log('[Vue Pusher] ✅ Evento order.message.sent recibido:', data);
+        
+        if (data && data.message) {
             // Evitar duplicados: verificar si el mensaje ya existe
             const messageExists = chatMessages.value.some(m => {
                 // Comparar por ID real o por contenido si es mensaje optimista
@@ -303,9 +319,11 @@ const setupPusher = () => {
             });
             
             if (!messageExists) {
+                console.log('[Vue Pusher] ✅ Agregando nuevo mensaje:', data.message);
                 chatMessages.value.push(data.message);
                 nextTick(() => scrollChatToBottom());
             } else {
+                console.log('[Vue Pusher] Mensaje ya existe, actualizando...');
                 // Si existe un mensaje optimista, reemplazarlo
                 const optimisticIndex = chatMessages.value.findIndex(m => 
                     String(m.id).startsWith('temp-') && 
@@ -317,6 +335,8 @@ const setupPusher = () => {
                     nextTick(() => scrollChatToBottom());
                 }
             }
+        } else {
+            console.warn('[Vue Pusher] ⚠️ Datos del evento no tienen formato esperado:', data);
         }
     });
     
