@@ -30,6 +30,14 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
         ]);
 
+        // Excluir rutas de chat y broadcasting de CSRF (aceptan sesión web)
+        // Los patrones usan * como comodín
+        $middleware->validateCsrfTokens(except: [
+            'api/orders/*/chat',
+            'api/orders/*/chat/*',
+            'broadcasting/auth',
+        ]);
+
         $middleware->alias([
             'role' => CheckRole::class,
         ]);

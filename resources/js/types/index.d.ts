@@ -50,20 +50,52 @@ export interface Role {
 export interface Order {
     id: number;
     user_id: number;
+    delivery_id?: number | null;
     address_id: number | null;
     subtotal: string;
     shipping_cost: string;
     total: string;
     payment_method: 'manual_transfer' | 'mobile_payment' | 'credit_card' | 'paypal' | 'binance';
     payment_reference: string | null;
-    status: 'pending_payment' | 'paid' | 'shipped' | 'completed' | 'cancelled' | 'refunded';
+    status: 'pending_payment' | 'paid' | 'received' | 'invoiced' | 'in_agency' | 'on_the_way' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'refunded';
     notes: string | null;
     created_at: string;
     updated_at: string;
+    assigned_at?: string | null;
+    delivered_at?: string | null;
     user?: User;
+    delivery?: User;
     address?: UserAddress;
     items?: OrderItem[];
     payment_proof?: PaymentProof;
+    status_history?: OrderStatusHistory[];
+    messages?: Message[];
+}
+
+export interface OrderStatusHistory {
+    id: number;
+    order_id: number;
+    status: string;
+    status_label: string;
+    changed_by_user_id: number | null;
+    comment: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    created_at: string;
+    changed_by?: User;
+}
+
+export interface Message {
+    id: number;
+    order_id: number;
+    user_id: number;
+    message: string;
+    message_type: 'text' | 'image' | 'file';
+    file_path: string | null;
+    is_delivery_message: boolean;
+    is_read: boolean;
+    created_at: string;
+    user?: User;
 }
 
 export interface OrderItem {

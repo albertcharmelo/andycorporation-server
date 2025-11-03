@@ -18,6 +18,8 @@ interface Props {
         status: string;
         payment_method: string;
         search: string;
+        date_from?: string;
+        date_to?: string;
     };
 }
 
@@ -38,13 +40,20 @@ const localFilters = ref({
     status: props.filters.status || 'all',
     payment_method: props.filters.payment_method || '',
     search: props.filters.search || '',
+    date_from: props.filters.date_from || '',
+    date_to: props.filters.date_to || '',
 });
 
 const statusOptions = [
     { value: 'all', label: 'Todos' },
     { value: 'pending_payment', label: 'Pago Pendiente' },
     { value: 'paid', label: 'Pagado' },
+    { value: 'received', label: 'Recibido' },
+    { value: 'invoiced', label: 'Facturado' },
+    { value: 'in_agency', label: 'En Agencia' },
+    { value: 'on_the_way', label: 'En Camino' },
     { value: 'shipped', label: 'Enviado' },
+    { value: 'delivered', label: 'Entregado' },
     { value: 'completed', label: 'Completado' },
     { value: 'cancelled', label: 'Cancelado' },
     { value: 'refunded', label: 'Reembolsado' },
@@ -60,10 +69,15 @@ const paymentMethodOptions = [
 ];
 
 const getStatusVariant = (status: Order['status']) => {
-    const variants = {
+    const variants: Record<string, string> = {
         pending_payment: 'secondary',
         paid: 'default',
+        received: 'default',
+        invoiced: 'default',
+        in_agency: 'default',
+        on_the_way: 'default',
         shipped: 'default',
+        delivered: 'default',
         completed: 'default',
         cancelled: 'destructive',
         refunded: 'outline',
@@ -72,10 +86,15 @@ const getStatusVariant = (status: Order['status']) => {
 };
 
 const getStatusLabel = (status: Order['status']) => {
-    const labels = {
+    const labels: Record<string, string> = {
         pending_payment: 'Pago Pendiente',
         paid: 'Pagado',
+        received: 'Recibido',
+        invoiced: 'Facturado',
+        in_agency: 'En Agencia',
+        on_the_way: 'En Camino',
         shipped: 'Enviado',
+        delivered: 'Entregado',
         completed: 'Completado',
         cancelled: 'Cancelado',
         refunded: 'Reembolsado',
@@ -123,12 +142,19 @@ const resetFilters = () => {
         status: 'all',
         payment_method: '',
         search: '',
+        date_from: '',
+        date_to: '',
     };
     applyFilters();
 };
 
 const viewOrderDetail = (orderId: number) => {
-    router.visit(`/admin/orders/${orderId}`);
+    // Mostrar indicador de carga
+    router.visit(`/admin/orders/${orderId}`, {
+        preserveState: false,
+        preserveScroll: false,
+        only: ['order', 'chatStats'], // Solo cargar estos props para mejorar rendimiento
+    });
 };
 
 const changePage = (page: number) => {
@@ -167,10 +193,10 @@ const currentPage = computed(() => props.orders.current_page);
                     <CardDescription>Filtra las órdenes por estado, método de pago o busca por referencia/cliente</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div class="grid gap-4 md:grid-cols-4">
+                    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
                         <div class="space-y-2">
                             <Label for="status">Estado</Label>
-                            <Select v-model="localFilters.status">
+                            <Select v-model="localFilters.status" @update:model-value="applyFilters">
                                 <SelectTrigger id="status">
                                     <SelectValue placeholder="Seleccionar estado" />
                                 </SelectTrigger>
@@ -188,7 +214,7 @@ const currentPage = computed(() => props.orders.current_page);
 
                         <div class="space-y-2">
                             <Label for="payment-method">Método de Pago</Label>
-                            <Select v-model="localFilters.payment_method">
+                            <Select v-model="localFilters.payment_method" @update:model-value="applyFilters">
                                 <SelectTrigger id="payment-method">
                                     <SelectValue placeholder="Seleccionar método" />
                                 </SelectTrigger>
@@ -202,6 +228,26 @@ const currentPage = computed(() => props.orders.current_page);
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="date-from">Fecha Desde</Label>
+                            <Input
+                                id="date-from"
+                                v-model="localFilters.date_from"
+                                type="date"
+                                @change="applyFilters"
+                            />
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="date-to">Fecha Hasta</Label>
+                            <Input
+                                id="date-to"
+                                v-model="localFilters.date_to"
+                                type="date"
+                                @change="applyFilters"
+                            />
                         </div>
 
                         <div class="space-y-2">
@@ -302,11 +348,19 @@ const currentPage = computed(() => props.orders.current_page);
                     </div>
 
                     <!-- Paginación -->
-                    <div v-if="totalPages > 1" class="flex items-center justify-between mt-4">
+                    <div v-if="totalPages > 1" class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
                         <p class="text-sm text-muted-foreground">
-                            Página {{ currentPage }} de {{ totalPages }}
+                            Mostrando página {{ currentPage }} de {{ totalPages }} ({{ orders.total }} órdenes en total)
                         </p>
-                        <div class="flex gap-2">
+                        <div class="flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                :disabled="currentPage === 1"
+                                @click="changePage(1)"
+                            >
+                                Primera
+                            </Button>
                             <Button
                                 size="sm"
                                 variant="outline"
@@ -315,6 +369,9 @@ const currentPage = computed(() => props.orders.current_page);
                             >
                                 Anterior
                             </Button>
+                            <span class="text-sm text-muted-foreground px-2">
+                                {{ currentPage }} / {{ totalPages }}
+                            </span>
                             <Button
                                 size="sm"
                                 variant="outline"
@@ -322,6 +379,14 @@ const currentPage = computed(() => props.orders.current_page);
                                 @click="changePage(currentPage + 1)"
                             >
                                 Siguiente
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                :disabled="currentPage === totalPages"
+                                @click="changePage(totalPages)"
+                            >
+                                Última
                             </Button>
                         </div>
                     </div>

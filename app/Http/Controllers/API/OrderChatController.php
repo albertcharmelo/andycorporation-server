@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Events\OrderMessageSent;
 use App\Http\Controllers\Controller;
+use App\Jobs\BroadcastOrderMessage;
 use App\Models\Message;
 use App\Models\Order;
 use Illuminate\Http\Request;
@@ -26,8 +27,16 @@ class OrderChatController extends Controller
     public function getMessages($orderId)
     {
         try {
-            $order = Order::findOrFail($orderId);
             $user = auth()->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No autenticado',
+                ], 401);
+            }
+            
+            $order = Order::findOrFail($orderId);
             
             // Determinar rol del usuario
             $userRole = $this->getUserRole($user, $order);
@@ -74,6 +83,15 @@ class OrderChatController extends Controller
      */
     public function sendMessage(Request $request, $orderId)
     {
+        $user = auth()->user();
+        
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No autenticado',
+            ], 401);
+        }
+        
         $request->validate([
             'message' => 'required|string|max:1000',
             'message_type' => 'nullable|in:text,image,file',
@@ -83,7 +101,6 @@ class OrderChatController extends Controller
         DB::beginTransaction();
         try {
             $order = Order::findOrFail($orderId);
-            $user = auth()->user();
             
             // Determinar rol
             $userRole = $this->getUserRole($user, $order);
@@ -135,8 +152,8 @@ class OrderChatController extends Controller
 
             $message->load('user:id,name,email,avatar');
 
-            // Emitir evento Pusher
-            event(new OrderMessageSent($message, $user, $order));
+            // Dispatch job para broadcasting asíncrono
+            dispatch(new BroadcastOrderMessage($message, $user, $order));
 
             DB::commit();
 

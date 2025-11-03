@@ -115,6 +115,20 @@ class Order extends Model
     }
 
     /**
+     * Scope para filtrar órdenes por rango de fechas.
+     */
+    public function scopeByDateRange($query, $dateFrom, $dateTo)
+    {
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+        return $query;
+    }
+
+    /**
      * Scope para órdenes recientes (las más nuevas primero).
      */
     public function scopeRecent($query)
@@ -136,6 +150,14 @@ class Order extends Model
     public function deliveryLocations()
     {
         return $this->hasMany(DeliveryLocation::class)->orderBy('created_at', 'desc');
+    }
+
+    /**
+     * Una orden tiene un historial de cambios de estado (timeline).
+     */
+    public function statusHistory()
+    {
+        return $this->hasMany(OrderStatusHistory::class)->orderBy('created_at', 'asc');
     }
 
     /**
