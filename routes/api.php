@@ -126,5 +126,8 @@ Route::group(['middleware' => ['auth:sanctum', 'role:admin,super_admin'], 'prefi
 Route::group(['middleware' => ['auth:sanctum', 'role:delivery'], 'prefix' => 'delivery'], function () {
     Route::prefix('orders')->group(function () {
         Route::get('/', [DeliveryOrderController::class, 'index']);                        // Listar órdenes asignadas al delivery
+        Route::put('/{orderId}/update-status', [DeliveryOrderController::class, 'updateStatus']);  // Actualizar estado (in_agency → on_the_way → delivered)
+        Route::post('/{orderId}/update-location', [DeliveryOrderController::class, 'updateLocation']); // Actualizar ubicación en tiempo real
+        Route::post('/{orderId}/sos', [DeliveryOrderController::class, 'sos']);          // Activar SOS para un pedido
     });
 });

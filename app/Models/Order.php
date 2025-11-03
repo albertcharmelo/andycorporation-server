@@ -22,14 +22,25 @@ class Order extends Model
         'notes',
         'assigned_at',
         'delivered_at',
+        'sos_status',
+        'sos_comment',
+        'sos_reported_at',
+        'current_latitude',
+        'current_longitude',
+        'location_updated_at',
     ];
 
     protected $casts = [
-        'subtotal'      => 'decimal:2',
-        'shipping_cost' => 'decimal:2',
-        'total'         => 'decimal:2',
-        'assigned_at'   => 'datetime',
-        'delivered_at'  => 'datetime',
+        'subtotal'           => 'decimal:2',
+        'shipping_cost'      => 'decimal:2',
+        'total'              => 'decimal:2',
+        'assigned_at'        => 'datetime',
+        'delivered_at'       => 'datetime',
+        'sos_status'         => 'boolean',
+        'sos_reported_at'    => 'datetime',
+        'location_updated_at' => 'datetime',
+        'current_latitude'   => 'decimal:8',
+        'current_longitude'  => 'decimal:8',
     ];
 
     /**
@@ -117,6 +128,14 @@ class Order extends Model
     public function delivery()
     {
         return $this->belongsTo(User::class, 'delivery_id');
+    }
+
+    /**
+     * Una orden tiene muchas ubicaciones de delivery (historial de tracking).
+     */
+    public function deliveryLocations()
+    {
+        return $this->hasMany(DeliveryLocation::class)->orderBy('created_at', 'desc');
     }
 
     /**
