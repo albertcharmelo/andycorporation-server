@@ -13,12 +13,16 @@ class Message extends Model
         'order_id',
         'user_id',
         'message',
+        'message_type',
+        'file_path',
+        'is_delivery_message',
         'is_read',
         'read_at',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
+        'is_delivery_message' => 'boolean',
         'read_at' => 'datetime',
     ];
 
@@ -52,6 +56,30 @@ class Message extends Model
     public function scopeForOrder($query, $orderId)
     {
         return $query->where('order_id', $orderId)->orderBy('created_at', 'asc');
+    }
+
+    /**
+     * Scope para obtener mensajes después de una fecha específica (útil para delivery).
+     */
+    public function scopeAfterDate($query, $date)
+    {
+        return $query->where('created_at', '>=', $date);
+    }
+
+    /**
+     * Scope para filtrar mensajes del delivery.
+     */
+    public function scopeDeliveryMessages($query)
+    {
+        return $query->where('is_delivery_message', true);
+    }
+
+    /**
+     * Scope para filtrar mensajes previos al delivery.
+     */
+    public function scopePreDeliveryMessages($query)
+    {
+        return $query->where('is_delivery_message', false);
     }
 
     /**
