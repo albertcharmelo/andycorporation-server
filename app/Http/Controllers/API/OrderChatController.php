@@ -2,16 +2,15 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Events\OrderMessageSent;
 use App\Http\Controllers\Controller;
-use App\Jobs\BroadcastOrderMessage;
+use App\Jobs\SendOrderMessage;
 use App\Models\Message;
 use App\Models\Order;
+use App\Events\OrderMessageSent;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 class OrderChatController extends Controller
 {
     /**
@@ -76,6 +75,9 @@ class OrderChatController extends Controller
 
     /**
      * Enviar mensaje en el chat.
+     * 
+     * El procesamiento se realiza de forma asíncrona mediante colas
+     * para evitar congestionar la aplicación.
      *
      * @param Request $request
      * @param int $orderId
@@ -98,15 +100,13 @@ class OrderChatController extends Controller
             'file' => 'nullable|file|max:10240', // 10MB max
         ]);
 
-        DB::beginTransaction();
         try {
+            // Validación básica de permisos antes de despachar el job
             $order = Order::findOrFail($orderId);
-            
-            // Determinar rol
             $userRole = $this->getUserRole($user, $order);
             
-            // Verificar permisos
-            if (!$this->canSendMessage($user, $order, $userRole)) {
+            // Verificar permisos básicos
+            if (!$this->canAccessOrder($user, $order, $userRole)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'No tienes permisos para enviar mensajes en este chat',
@@ -122,15 +122,19 @@ class OrderChatController extends Controller
             }
 
             $messageType = $request->message_type ?? 'text';
-            $filePath = null;
+            $tempFilePath = null;
+            $originalFileName = null;
 
-            // Manejar archivo si existe
+            // Guardar archivo temporalmente si existe
             if ($request->hasFile('file')) {
                 $file = $request->file('file');
-                $fileName = Str::uuid() . '.' . $file->getClientOriginalExtension();
-                $filePath = $file->storeAs("messages/{$orderId}", $fileName, 'public');
+                $originalFileName = $file->getClientOriginalName();
                 
-                // Actualizar message_type según tipo de archivo
+                // Guardar en ubicación temporal (directorio temp)
+                $tempFileName = 'temp_' . \Illuminate\Support\Str::uuid() . '.' . $file->getClientOriginalExtension();
+                $tempFilePath = $file->storeAs('temp/messages', $tempFileName, 'public');
+                
+                // Detectar tipo de mensaje según tipo de archivo
                 if (str_starts_with($file->getMimeType(), 'image/')) {
                     $messageType = 'image';
                 } else {
@@ -138,40 +142,95 @@ class OrderChatController extends Controller
                 }
             }
 
-            // Determinar si es mensaje de delivery
-            $isDeliveryMessage = $userRole === 'delivery';
-
-            $message = Message::create([
+            // Verificar si estamos en modo sync (desarrollo) o async (producción)
+            $queueConnection = config('queue.default');
+            $isSync = $queueConnection === 'sync';
+            
+            Log::info('OrderChatController: Enviando mensaje', [
                 'order_id' => $orderId,
                 'user_id' => $user->id,
-                'message' => $request->message,
-                'message_type' => $messageType,
-                'file_path' => $filePath,
-                'is_delivery_message' => $isDeliveryMessage,
+                'queue_connection' => $queueConnection,
+                'is_sync' => $isSync,
             ]);
 
-            $message->load('user:id,name,email,avatar');
+            // Si estamos en modo sync, ejecutar el job inmediatamente y esperar el resultado
+            // Si estamos en modo async, despachar el job normalmente
+            if ($isSync) {
+                // En modo sync, ejecutar el job inmediatamente para que el evento se emita de inmediato
+                try {
+                    $job = new SendOrderMessage(
+                        $orderId,
+                        $user->id,
+                        $request->message,
+                        $messageType,
+                        $tempFilePath,
+                        $originalFileName
+                    );
+                    $job->handle();
+                    
+                    Log::info('OrderChatController: Job ejecutado en modo sync, evento debería estar emitido');
+                    
+                    return response()->json([
+                        'message' => 'Mensaje enviado exitosamente',
+                        'status' => 'sent',
+                    ], 201);
+                } catch (\Exception $e) {
+                    Log::error('OrderChatController: Error al ejecutar job en modo sync', [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
+                    
+                    // Fallback: despachar el job normalmente
+                    SendOrderMessage::dispatch(
+                        $orderId,
+                        $user->id,
+                        $request->message,
+                        $messageType,
+                        $tempFilePath,
+                        $originalFileName
+                    );
+                }
+            } else {
+                // Modo async: despachar el job normalmente
+                SendOrderMessage::dispatch(
+                    $orderId,
+                    $user->id,
+                    $request->message,
+                    $messageType,
+                    $tempFilePath,
+                    $originalFileName
+                );
 
-            DB::commit();
+                Log::info('OrderChatController: Job despachado en modo async para orden: ' . $orderId . ' por usuario: ' . $user->id);
+            }
 
-            // Disparar evento de broadcasting inmediatamente (sincrónico para tiempo real)
-            try {
-                \Log::info('Disparando evento OrderMessageSent para orden: ' . $orderId);
-                event(new OrderMessageSent($message, $user, $order));
-                \Log::info('Evento OrderMessageSent disparado exitosamente');
-            } catch (\Exception $e) {
-                \Log::error('Error al disparar evento OrderMessageSent: ' . $e->getMessage());
+            // Responder inmediatamente mientras el job se procesa en background
+            // El mensaje real llegará vía Pusher cuando el job termine de procesarse
+            return response()->json([
+                'message' => 'Mensaje en proceso de envío',
+                'status' => 'processing',
+                // Nota: 'data' no está disponible aquí porque el mensaje se procesa en background
+                // El mensaje real llegará vía evento Pusher cuando el job termine
+            ], 202); // 202 Accepted - indica que la solicitud fue aceptada pero aún no procesada
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Orden no encontrada',
+            ], 404);
+        } catch (\Exception $e) {
+            // Limpiar archivo temporal si hubo error antes de despachar el job
+            if (isset($tempFilePath) && $tempFilePath && Storage::disk('public')->exists($tempFilePath)) {
+                try {
+                    Storage::disk('public')->delete($tempFilePath);
+                } catch (\Exception $deleteError) {
+                    \Log::warning('No se pudo eliminar archivo temporal después del error: ' . $deleteError->getMessage());
+                }
             }
 
             return response()->json([
-                'message' => 'Mensaje enviado exitosamente',
-                'data' => $message,
-            ], 201);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
                 'success' => false,
-                'message' => 'Error al enviar mensaje',
+                'message' => 'Error al procesar solicitud de envío',
                 'error' => $e->getMessage(),
             ], 500);
         }

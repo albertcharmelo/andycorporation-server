@@ -1,4 +1,5 @@
 import '../css/app.css';
+import './bootstrap'; // Inicializar Echo y axios con CSRF
 
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';

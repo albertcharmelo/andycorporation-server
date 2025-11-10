@@ -23,4 +23,9 @@ Route::middleware(['auth', 'verified', 'role:admin,super_admin'])->prefix('admin
     Route::prefix('deliveries')->name('deliveries.')->group(function () {
         Route::get('/', [DeliveryController::class, 'index'])->name('index');        // Lista de deliveries
     });
+
+    // Página de prueba de Pusher
+    Route::get('/pusher-test', function () {
+        return \Inertia\Inertia::render('admin/PusherTest');
+    })->name('pusher-test');
 });

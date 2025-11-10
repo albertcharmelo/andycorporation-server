@@ -3,12 +3,28 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 window.Pusher = Pusher;
 
+// Configuración de Laravel Echo con Pusher
+// Echo maneja automáticamente la autenticación con sesión web
 window.Echo = new Echo({
-    broadcaster: 'reverb',
-    key: import.meta.env.VITE_REVERB_APP_KEY,
-    wsHost: import.meta.env.VITE_REVERB_HOST,
-    wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
-    wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
-    forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
-    enabledTransports: ['ws', 'wss'],
+    broadcaster: 'pusher',
+    key: import.meta.env.VITE_PUSHER_APP_KEY || 'a637463b7b6b72bc1298',
+    cluster: import.meta.env.VITE_PUSHER_CLUSTER || 'sa1',
+    forceTLS: false, // Cambiar a true en producción con HTTPS
+    encrypted: true,
+    channelAuthorization: {
+        authorize: (channel, callback) => {
+            console.log('Authorizing channel:', channel);
+            return callback(null, {
+                auth: {
+                    headers: {
+                        Authorization: `Bearer ${localStorage.getItem('api_token')}`,
+                    },
+                },
+            });
+        },
+    },
+    authEndpoint: '/broadcasting/auths',
+    // authEndpoint se configura automáticamente según el contexto (web o API)
+    // Para sesión web: usa /broadcasting/auth
+    // Para API: usa /api/broadcasting/auth (si se proporciona token)
 });
