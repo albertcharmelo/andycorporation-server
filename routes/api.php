@@ -14,8 +14,22 @@ use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/user', function (Request $request) {
+    $user = $request->user();
+    
+    if (!$user) {
+        return response()->json([
+            'message' => 'No autenticado',
+        ], 401);
+    }
+    
     return [
-        'user'    => $request->user(),
+        'user' => [
+            ...$user->toArray(),
+            'roles' => $user->getRoleNames()->toArray(),
+            'is_admin' => $user->hasAnyRole(['admin', 'super_admin']),
+            'is_delivery' => $user->hasRole('delivery'),
+            'is_client' => $user->hasRole('client') || $user->getRoleNames()->isEmpty(),
+        ],
         'message' => 'Welcome to the API',
     ];
 })->middleware('auth:sanctum');
@@ -96,6 +110,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::prefix('orders')->group(function () {
         Route::get('/', [CheckoutController::class, 'getUserOrders']);                              // Listar órdenes del usuario
         Route::get('/{orderId}', [CheckoutController::class, 'getUserOrderDetail']);                 // Detalle de una orden
+        Route::get('/{orderId}/delivery-location', [CheckoutController::class, 'getDeliveryLocation']); // Obtener ubicación GPS del delivery
         Route::get('/{orderId}/chats', [OrderChatController::class, 'getMessages']);                  // Obtener mensajes
         Route::post('/{orderId}/chats', [OrderChatController::class, 'sendMessage']);                  // Enviar mensaje
         Route::put('/{orderId}/chats/mark-read', [OrderChatController::class, 'markAsRead']);        // Marcar como leído

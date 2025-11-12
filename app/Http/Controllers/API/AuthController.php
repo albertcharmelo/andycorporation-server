@@ -77,7 +77,13 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'Usuario creado correctamente',
                 'token' => $user->createToken("api-token")->plainTextToken,
-                'user' => $user
+                'user' => [
+                    ...$user->toArray(),
+                    'roles' => $user->getRoleNames()->toArray(),
+                    'is_admin' => $user->hasAnyRole(['admin', 'super_admin']),
+                    'is_delivery' => $user->hasRole('delivery'),
+                    'is_client' => $user->hasRole('client') || $user->getRoleNames()->isEmpty(),
+                ]
             ]);
         } catch (\Throwable $th) {
             ## Si ocurre un error, se hace rollback
@@ -130,7 +136,13 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Usuario logeado correctamente',
             'token' => $user->createToken("api-token")->plainTextToken,
-            'user' => $user
+            'user' => [
+                ...$user->toArray(),
+                'roles' => $user->getRoleNames()->toArray(),
+                'is_admin' => $user->hasAnyRole(['admin', 'super_admin']),
+                'is_delivery' => $user->hasRole('delivery'),
+                'is_client' => $user->hasRole('client') || $user->getRoleNames()->isEmpty(),
+            ]
         ]);
     }
 }

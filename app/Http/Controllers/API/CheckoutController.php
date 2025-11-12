@@ -5,8 +5,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentProof;
-
-
+use App\Models\DeliveryLocation;
 use App\Models\UserAddress; // Para validar la dirección de envío
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -272,6 +271,96 @@ class CheckoutController extends Controller
             'message' => 'Detalle de la orden.',
             'order'   => $order->toArray(),
         ]);
+    }
+
+    /**
+     * Obtener la ubicación GPS del delivery asignado a una orden.
+     * Solo disponible si la orden tiene un delivery asignado y está en camino o entregada.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $orderId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getDeliveryLocation(Request $request, $orderId)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'No autenticado',
+            ], 401);
+        }
+
+        // Buscar la orden y verificar que pertenezca al usuario
+        $order = $user->orders()->with('delivery')->find($orderId);
+
+        if (!$order) {
+            return response()->json([
+                'message' => 'Orden no encontrada o no te pertenece.',
+            ], 404);
+        }
+
+        // Verificar que la orden tenga un delivery asignado
+        if (!$order->delivery_id) {
+            return response()->json([
+                'message' => 'Esta orden aún no tiene un delivery asignado.',
+                'has_delivery' => false,
+            ], 404);
+        }
+
+        // Verificar que el delivery tenga ubicación (solo si está en camino o entregado)
+        $allowedStatuses = ['shipped', 'on_the_way', 'delivered'];
+        if (!in_array($order->status, $allowedStatuses)) {
+            return response()->json([
+                'message' => 'La ubicación del delivery solo está disponible cuando el pedido está en camino o entregado.',
+                'current_status' => $order->status,
+                'has_location' => false,
+            ], 400);
+        }
+
+        // Obtener la ubicación actual del delivery
+        $currentLocation = null;
+        if ($order->current_latitude && $order->current_longitude) {
+            $currentLocation = [
+                'latitude' => (float) $order->current_latitude,
+                'longitude' => (float) $order->current_longitude,
+                'updated_at' => $order->location_updated_at ? $order->location_updated_at->toISOString() : null,
+            ];
+        }
+
+        // Obtener el historial de ubicaciones (últimas 50 ubicaciones)
+        $locationHistory = DeliveryLocation::where('order_id', $order->id)
+            ->orderBy('created_at', 'desc')
+            ->limit(50)
+            ->get()
+            ->map(function ($location) {
+                return [
+                    'latitude' => (float) $location->latitude,
+                    'longitude' => (float) $location->longitude,
+                    'timestamp' => $location->created_at->toISOString(),
+                ];
+            })
+            ->values();
+
+        // Obtener información básica del delivery (sin datos sensibles)
+        $deliveryInfo = null;
+        if ($order->delivery) {
+            $deliveryInfo = [
+                'id' => $order->delivery->id,
+                'name' => $order->delivery->name,
+            ];
+        }
+
+        return response()->json([
+            'message' => 'Ubicación del delivery obtenida exitosamente.',
+            'order_id' => $order->id,
+            'order_status' => $order->status,
+            'delivery' => $deliveryInfo,
+            'current_location' => $currentLocation,
+            'location_history' => $locationHistory,
+            'has_location' => $currentLocation !== null,
+            'last_updated' => $order->location_updated_at ? $order->location_updated_at->toISOString() : null,
+        ], 200);
     }
 
 }
