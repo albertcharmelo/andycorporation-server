@@ -34,9 +34,15 @@ Route::get('/user', function (Request $request) {
     ];
 })->middleware('auth:sanctum');
 
-// Ruta de autenticación de broadcasting para Pusher con Sanctum
-// Laravel maneja automáticamente la autenticación usando routes/channels.php
-Broadcast::routes(['middleware' => ['auth:sanctum']], ['prefix' => 'api']);
+// Ruta personalizada de autenticación de broadcasting para Pusher con Sanctum
+// Usa nuestro controlador personalizado que valida el usuario
+Route::post('/broadcasting/auth', [\App\Http\Controllers\BroadcastingAuthController::class, 'authenticate'])
+    ->middleware(['auth:sanctum'])
+    ->name('api.broadcasting.auth');
+
+// Dashboard
+Route::get('/dashboard', [\App\Http\Controllers\API\DashboardController::class, 'index'])
+    ->middleware('auth:sanctum');
 
 ## Auth
 Route::prefix('auth')->group(function () {
@@ -154,6 +160,14 @@ Route::group(['middleware' => ['auth:sanctum', 'role:admin,super_admin'], 'prefi
         Route::get('/{orderId}/unread', [ChatController::class, 'getUnreadCount']);        // Contar no leídos
     });
 });
+
+// **********************************
+// * Rutas de Prueba (Testing) - Solo para desarrollo *
+// **********************************
+// Ruta de prueba para enviar mensajes sin autenticación
+// Ejemplo: GET /api/test/send-message/14?message=Hola desde test&user_id=1
+Route::get('/test/send-message/{orderId}', [\App\Http\Controllers\API\TestChatController::class, 'sendTestMessage'])
+    ->name('api.test.send-message');
 
 // **********************************
 // * Rutas de Delivery *

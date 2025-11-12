@@ -30,12 +30,12 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-        // Excluir rutas de chat y broadcasting de CSRF (aceptan sesión web)
-        // Los patrones usan * como comodín
+        // IMPORTANTE: NO excluir broadcasting/auth de CSRF
+        // Pusher necesita que se verifique el CSRF token para autenticación de sesión web
         $middleware->validateCsrfTokens(except: [
-            'api/orders/*/chat',
-            'api/orders/*/chat/*',
-            'broadcasting/auth',
+            // Solo excluimos las rutas de API que usan tokens Bearer
+            // 'api/orders/*/chat', // Comentado - estas rutas ahora están en web.php con middleware web
+            // 'broadcasting/auth', // REMOVIDO - Pusher necesita CSRF
         ]);
 
         $middleware->alias([

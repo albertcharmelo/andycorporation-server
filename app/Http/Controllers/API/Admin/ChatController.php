@@ -5,8 +5,10 @@ namespace App\Http\Controllers\API\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Message;
 use App\Models\Order;
+use App\Events\OrderMessageSent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ChatController extends Controller
 {
@@ -73,12 +75,36 @@ class ChatController extends Controller
                 'message' => $request->message,
             ]);
 
+            // Cargar relaciones antes de emitir el evento
+            $message->load('user:id,name,email,avatar');
+            $order->refresh();
+
             DB::commit();
+
+            // Emitir el evento de broadcasting
+            try {
+                Log::info('[Admin Chat] 📡 Emitiendo evento OrderMessageSent...', [
+                    'message_id' => $message->id,
+                    'order_id' => $orderId,
+                    'user_id' => $user->id,
+                    'channel' => 'private-order.' . $orderId,
+                ]);
+                
+                broadcast(new OrderMessageSent($message, $user, $order));
+                
+                Log::info('[Admin Chat] ✅ Evento OrderMessageSent emitido exitosamente');
+            } catch (\Exception $e) {
+                Log::error('[Admin Chat] ❌ Error al emitir evento:', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                // No lanzar excepción, el mensaje ya está guardado
+            }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Mensaje enviado',
-                'data' => $message->load('user:id,name,email,avatar'),
+                'data' => $message,
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();

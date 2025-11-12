@@ -41,6 +41,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
+    'supports_credentials' => true, // Necesario para enviar cookies de sesión en autenticación de broadcasting
 
 ];

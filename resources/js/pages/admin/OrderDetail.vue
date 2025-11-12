@@ -12,7 +12,6 @@ import type { BreadcrumbItem, Order, OrderStatusHistory, Message } from '@/types
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Check, FileText, MapPin, Package, User, X, MessageCircle, Clock, Send, Image as ImageIcon, Paperclip } from 'lucide-vue-next';
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
-import Pusher from 'pusher-js';
 
 interface Props {
     order: Order;
@@ -51,7 +50,7 @@ const activeTab = ref<'details' | 'timeline' | 'chat'>('details');
 const chatMessages = ref<Message[]>(props.order.messages || []);
 const chatMessageText = ref('');
 const chatLoading = ref(false);
-const pusherChannel = ref<any>(null);
+const echoChannel = ref<any>(null);
 const pusherConnected = ref(false);
 const pusherError = ref<string | null>(null);
 
@@ -153,9 +152,9 @@ const timeline = computed(() => {
     if (!props.order.status_history || props.order.status_history.length === 0) {
         return [];
     }
-    
+
     // Ordenar por fecha ascendente
-    return [...props.order.status_history].sort((a, b) => 
+    return [...props.order.status_history].sort((a, b) =>
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 });
@@ -170,7 +169,7 @@ const loadMessages = async () => {
                 'X-Requested-With': 'XMLHttpRequest',
             },
         });
-        
+
         if (response.ok) {
             const data = await response.json();
             chatMessages.value = data.messages || [];
@@ -186,10 +185,10 @@ const loadMessages = async () => {
 
 const sendMessage = async () => {
     if (!chatMessageText.value.trim()) return;
-    
+
     const currentText = chatMessageText.value;
     const tempId = Date.now();
-    
+
     // Optimistic update: agregar mensaje inmediatamente
     const optimisticMessage: Message = {
         id: `temp-${tempId}`,
@@ -203,15 +202,15 @@ const sendMessage = async () => {
         created_at: new Date().toISOString(),
         user: authUser || undefined,
     } as Message;
-    
+
     chatMessages.value.push(optimisticMessage);
     chatMessageText.value = '';
     await nextTick();
     scrollChatToBottom();
-    
+
     const formData = new FormData();
     formData.append('message', currentText);
-    
+
     try {
         const response = await fetch(`/api/orders/${props.order.id}/chat`, {
             method: 'POST',
@@ -223,7 +222,7 @@ const sendMessage = async () => {
             },
             body: formData,
         });
-        
+
         if (response.ok) {
             const data = await response.json();
             // Reemplazar mensaje optimista con el real
@@ -263,70 +262,61 @@ const scrollChatToBottom = () => {
     }
 };
 
-// Pusher setup
-const setupPusher = () => {
-    const pusherKey = import.meta.env.VITE_PUSHER_APP_KEY || 'your-pusher-key';
-    const pusherCluster = import.meta.env.VITE_PUSHER_CLUSTER || 'mt1';
-    
-    if (!pusherKey || pusherKey === 'your-pusher-key') {
-        console.warn('Pusher key not configured');
-        pusherError.value = 'Pusher no configurado';
+// Echo setup - Usa Laravel Echo que maneja automáticamente la autenticación
+const setupEcho = () => {
+    // Verificar que Echo esté disponible (configurado en bootstrap.ts)
+    if (!window.Echo) {
+        console.error('[Vue Echo] Echo no está disponible. Verifica que bootstrap.ts esté importado.');
+        pusherError.value = 'Echo no configurado';
         return;
     }
-    
-    // Obtener token si está disponible (para API) o usar sesión web
-    const apiToken = localStorage.getItem('api_token');
-    const authHeaders: any = {
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-    };
-    
-    // Si hay token, agregarlo al header
-    if (apiToken) {
-        authHeaders['Authorization'] = `Bearer ${apiToken}`;
-    }
-    
-    const pusher = new Pusher(pusherKey, {
-        cluster: pusherCluster,
-        encrypted: true,
-        authEndpoint: apiToken ? '/api/broadcasting/auth' : '/broadcasting/auth', // Usar API si hay token, sino sesión web
-        auth: {
-            headers: authHeaders,
-        },
-        // Habilitar envío de cookies (session) para autenticación web
-        enabledTransports: ['ws', 'wss'],
+
+    console.log('[Vue Echo] Configurando suscripción al canal...');
+
+    // Suscribirse al canal privado usando Echo
+    // Echo maneja automáticamente la autenticación con sesión web
+    // El nombre del canal debe coincidir con routes/channels.php: 'private-order.{orderId}'
+    // Echo automáticamente convierte 'order.X' a 'private-order.X'
+    const channel = window.Echo.private(`order.${props.order.id}`);
+    echoChannel.value = channel;
+
+    // Escuchar eventos de suscripción
+    channel.subscribed(() => {
+        console.log('[Vue Echo] ✅ Suscrito exitosamente al canal private-order.' + props.order.id);
+        pusherConnected.value = true;
+        pusherError.value = null;
     });
-    
-    const channel = pusher.subscribe(`private-order.${props.order.id}`);
-    pusherChannel.value = channel;
-    
-    // Escuchar todos los eventos del canal para debug
-    channel.bind_global((eventName: string, data: any) => {
-        console.log('[Vue Pusher] Evento global recibido:', eventName, data);
+
+    channel.error((status: number) => {
+        console.error('[Vue Echo] ❌ Error de suscripción al canal:', status);
+        pusherError.value = `Error de autenticación (${status}). Verifica que estés autenticado.`;
+        pusherConnected.value = false;
     });
-    
-    channel.bind('order.message.sent', (data: any) => {
-        console.log('[Vue Pusher] ✅ Evento order.message.sent recibido:', data);
-        
+
+    // Escuchar el evento de mensaje
+    // Laravel Echo usa el formato '.order.message.sent' (con punto al inicio)
+    channel.listen('.order.message.sent', (data: any) => {
+        console.log('[Vue Echo] ✅ Evento order.message.sent recibido:', data);
+
         if (data && data.message) {
             // Evitar duplicados: verificar si el mensaje ya existe
             const messageExists = chatMessages.value.some(m => {
                 // Comparar por ID real o por contenido si es mensaje optimista
-                return m.id === data.message.id || 
-                       (String(m.id).startsWith('temp-') && 
-                        m.message === data.message.message && 
+                return m.id === data.message.id ||
+                    (String(m.id).startsWith('temp-') &&
+                        m.message === data.message.message &&
                         m.user_id === data.message.user_id);
             });
-            
+
             if (!messageExists) {
-                console.log('[Vue Pusher] ✅ Agregando nuevo mensaje:', data.message);
+                console.log('[Vue Echo] ✅ Agregando nuevo mensaje:', data.message);
                 chatMessages.value.push(data.message);
                 nextTick(() => scrollChatToBottom());
             } else {
-                console.log('[Vue Pusher] Mensaje ya existe, actualizando...');
+                console.log('[Vue Echo] Mensaje ya existe, actualizando...');
                 // Si existe un mensaje optimista, reemplazarlo
-                const optimisticIndex = chatMessages.value.findIndex(m => 
-                    String(m.id).startsWith('temp-') && 
+                const optimisticIndex = chatMessages.value.findIndex(m =>
+                    String(m.id).startsWith('temp-') &&
                     m.message === data.message.message &&
                     m.user_id === data.message.user_id
                 );
@@ -336,26 +326,31 @@ const setupPusher = () => {
                 }
             }
         } else {
-            console.warn('[Vue Pusher] ⚠️ Datos del evento no tienen formato esperado:', data);
+            console.warn('[Vue Echo] ⚠️ Datos del evento no tienen formato esperado:', data);
         }
     });
-    
-    pusher.connection.bind('connected', () => {
-        console.log('Conectado a Pusher');
-        pusherConnected.value = true;
-        pusherError.value = null;
-    });
 
-    pusher.connection.bind('disconnected', () => {
-        console.log('Desconectado de Pusher');
-        pusherConnected.value = false;
-    });
-    
-    pusher.connection.bind('error', (err: any) => {
-        console.error('Error de conexión Pusher:', err);
-        pusherError.value = err?.error?.data?.message || 'Error de conexión';
-        pusherConnected.value = false;
-    });
+    // Monitorear estado de conexión de Pusher (a través de Echo)
+    if (window.Echo.connector && window.Echo.connector.pusher) {
+        const pusher = window.Echo.connector.pusher;
+
+        pusher.connection.bind('connected', () => {
+            console.log('[Vue Echo] ✅ Conectado a Pusher');
+            pusherConnected.value = true;
+            pusherError.value = null;
+        });
+
+        pusher.connection.bind('disconnected', () => {
+            console.log('[Vue Echo] Desconectado de Pusher');
+            pusherConnected.value = false;
+        });
+
+        pusher.connection.bind('error', (err: any) => {
+            console.error('[Vue Echo] Error de conexión:', err);
+            pusherError.value = err?.error?.data?.message || 'Error de conexión Pusher';
+            pusherConnected.value = false;
+        });
+    }
 };
 
 const goBack = () => {
@@ -404,7 +399,7 @@ const viewPaymentProof = async () => {
 // Lifecycle
 onMounted(() => {
     loadMessages();
-    setupPusher();
+    setupEcho();
     watch(() => activeTab.value, (newTab) => {
         if (newTab === 'chat') {
             nextTick(() => {
@@ -415,14 +410,16 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-    if (pusherChannel.value) {
-        pusherChannel.value.unbind('order.message.sent');
-        // Pusher disconnect will happen automatically
+    if (echoChannel.value) {
+        // Echo maneja automáticamente la desconexión
+        echoChannel.value.stopListening('.order.message.sent');
+        window.Echo?.leave(`order.${props.order.id}`); // Echo automáticamente convierte 'order.X' a 'private-order.X'
     }
 });
 </script>
 
 <template>
+
     <Head :title="`Orden #${order.id} - Admin`" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
@@ -449,44 +446,33 @@ onUnmounted(() => {
             <!-- Tabs -->
             <div class="border-b">
                 <nav class="flex space-x-4 overflow-x-auto">
-                    <button
-                        @click="activeTab = 'details'"
-                        :class="[
-                            'px-4 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap',
-                            activeTab === 'details'
-                                ? 'border-primary text-primary'
-                                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
-                        ]"
-                    >
+                    <button @click="activeTab = 'details'" :class="[
+                        'px-4 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap',
+                        activeTab === 'details'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
+                    ]">
                         Detalles
                     </button>
-                    <button
-                        @click="activeTab = 'timeline'"
-                        :class="[
-                            'px-4 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap',
-                            activeTab === 'timeline'
-                                ? 'border-primary text-primary'
-                                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
-                        ]"
-                    >
+                    <button @click="activeTab = 'timeline'" :class="[
+                        'px-4 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap',
+                        activeTab === 'timeline'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
+                    ]">
                         <Clock class="inline-block mr-2 h-4 w-4" />
                         Timeline
                     </button>
-                    <button
-                        @click="activeTab = 'chat'"
-                        :class="[
-                            'px-4 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap relative',
-                            activeTab === 'chat'
-                                ? 'border-primary text-primary'
-                                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
-                        ]"
-                    >
+                    <button @click="activeTab = 'chat'" :class="[
+                        'px-4 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap relative',
+                        activeTab === 'chat'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
+                    ]">
                         <MessageCircle class="inline-block mr-2 h-4 w-4" />
                         Chat
-                        <span
-                            v-if="chatStats?.unread_messages && chatStats.unread_messages > 0"
-                            class="ml-2 px-2 py-0.5 text-xs rounded-full bg-primary text-primary-foreground"
-                        >
+                        <span v-if="chatStats?.unread_messages && chatStats.unread_messages > 0"
+                            class="ml-2 px-2 py-0.5 text-xs rounded-full bg-primary text-primary-foreground">
                             {{ chatStats.unread_messages }}
                         </span>
                     </button>
@@ -524,7 +510,8 @@ onUnmounted(() => {
                                     <div>
                                         <p class="text-sm font-medium text-muted-foreground">Cédula</p>
                                         <p class="text-base">
-                                            {{ order.user?.cedula_type?.toUpperCase() }}-{{ order.user?.cedula_ID || 'N/A' }}
+                                            {{ order.user?.cedula_type?.toUpperCase() }}-{{ order.user?.cedula_ID ||
+                                                'N/A' }}
                                         </p>
                                     </div>
                                 </div>
@@ -543,7 +530,8 @@ onUnmounted(() => {
                                 <div class="space-y-2">
                                     <p class="font-medium">{{ order.delivery.name }}</p>
                                     <p class="text-sm text-muted-foreground">{{ order.delivery.email }}</p>
-                                    <p v-if="order.delivery.tel" class="text-sm text-muted-foreground">Tel: {{ order.delivery.tel }}</p>
+                                    <p v-if="order.delivery.tel" class="text-sm text-muted-foreground">Tel: {{
+                                        order.delivery.tel }}</p>
                                     <p v-if="order.assigned_at" class="text-xs text-muted-foreground">
                                         Asignado el {{ formatDate(order.assigned_at) }}
                                     </p>
@@ -562,7 +550,8 @@ onUnmounted(() => {
                             <CardContent class="space-y-2">
                                 <p class="font-medium">{{ order.address.name }}</p>
                                 <p class="text-sm">{{ order.address.address_line_1 }}</p>
-                                <p v-if="order.address.address_line_2" class="text-sm">{{ order.address.address_line_2 }}</p>
+                                <p v-if="order.address.address_line_2" class="text-sm">{{ order.address.address_line_2
+                                }}</p>
                                 <p class="text-sm">Código Postal: {{ order.address.postal_code }}</p>
                                 <p v-if="order.address.referencia" class="text-sm text-muted-foreground">
                                     Referencia: {{ order.address.referencia }}
@@ -583,15 +572,13 @@ onUnmounted(() => {
                             </CardHeader>
                             <CardContent>
                                 <div class="space-y-4">
-                                    <div
-                                        v-for="item in order.items"
-                                        :key="item.id"
-                                        class="flex items-center justify-between border-b pb-3 last:border-0"
-                                    >
+                                    <div v-for="item in order.items" :key="item.id"
+                                        class="flex items-center justify-between border-b pb-3 last:border-0">
                                         <div class="flex-1">
                                             <p class="font-medium">{{ item.product_name }}</p>
                                             <p class="text-sm text-muted-foreground">
-                                                Cantidad: {{ item.quantity }} × {{ formatCurrency(item.price_at_purchase) }}
+                                                Cantidad: {{ item.quantity }} × {{
+                                                    formatCurrency(item.price_at_purchase) }}
                                             </p>
                                         </div>
                                         <p class="font-semibold">
@@ -691,20 +678,21 @@ onUnmounted(() => {
                             <div class="relative">
                                 <div class="absolute left-4 top-0 bottom-0 w-0.5 bg-border"></div>
                                 <div class="space-y-6">
-                                    <div
-                                        v-for="(item, index) in timeline"
-                                        :key="item.id || index"
-                                        class="relative pl-12"
-                                    >
-                                        <div class="absolute left-0 top-1.5 h-3 w-3 rounded-full bg-primary border-2 border-background"></div>
+                                    <div v-for="(item, index) in timeline" :key="item.id || index"
+                                        class="relative pl-12">
+                                        <div
+                                            class="absolute left-0 top-1.5 h-3 w-3 rounded-full bg-primary border-2 border-background">
+                                        </div>
                                         <div class="space-y-1">
                                             <div class="flex items-center gap-2">
                                                 <Badge :variant="getStatusVariant(item.status as any)">
                                                     {{ item.status_label }}
                                                 </Badge>
-                                                <span class="text-xs text-muted-foreground">{{ formatDate(item.created_at) }}</span>
+                                                <span class="text-xs text-muted-foreground">{{
+                                                    formatDate(item.created_at) }}</span>
                                             </div>
-                                            <p v-if="item.comment" class="text-sm text-muted-foreground">{{ item.comment }}</p>
+                                            <p v-if="item.comment" class="text-sm text-muted-foreground">{{ item.comment
+                                            }}</p>
                                             <p v-if="item.changed_by" class="text-xs text-muted-foreground">
                                                 Por: {{ item.changed_by.name }}
                                             </p>
@@ -726,13 +714,10 @@ onUnmounted(() => {
                                     Chat de la Orden
                                 </div>
                                 <div class="flex items-center gap-2 text-xs">
-                                    <span
-                                        :class="[
-                                            'h-2 w-2 rounded-full',
-                                            pusherConnected ? 'bg-green-500' : 'bg-gray-400'
-                                        ]"
-                                        :title="pusherConnected ? 'Conectado' : 'Desconectado'"
-                                    ></span>
+                                    <span :class="[
+                                        'h-2 w-2 rounded-full',
+                                        pusherConnected ? 'bg-green-500' : 'bg-gray-400'
+                                    ]" :title="pusherConnected ? 'Conectado' : 'Desconectado'"></span>
                                     <span v-if="pusherError" class="text-destructive text-xs">
                                         {{ pusherError }}
                                     </span>
@@ -740,7 +725,8 @@ onUnmounted(() => {
                             </CardTitle>
                             <CardDescription>
                                 {{ chatStats?.total_messages || 0 }} mensajes
-                                <span v-if="chatStats?.unread_messages && chatStats.unread_messages > 0" class="text-primary">
+                                <span v-if="chatStats?.unread_messages && chatStats.unread_messages > 0"
+                                    class="text-primary">
                                     • {{ chatStats.unread_messages }} no leídos
                                 </span>
                             </CardDescription>
@@ -748,42 +734,33 @@ onUnmounted(() => {
                         <CardContent class="flex-1 flex flex-col p-0">
                             <!-- Messages Area -->
                             <div id="chat-messages" class="flex-1 p-4 overflow-y-auto">
-                                <div v-if="chatMessages.length === 0" class="flex items-center justify-center h-full text-muted-foreground">
+                                <div v-if="chatMessages.length === 0"
+                                    class="flex items-center justify-center h-full text-muted-foreground">
                                     <div class="text-center">
                                         <MessageCircle class="h-12 w-12 mx-auto mb-2 opacity-50" />
                                         <p>No hay mensajes todavía</p>
                                     </div>
                                 </div>
                                 <div v-else class="space-y-4">
-                                    <div
-                                        v-for="message in chatMessages"
-                                        :key="message.id"
-                                        :class="[
-                                            'flex gap-3',
-                                            message.user_id === authUser?.id ? 'flex-row-reverse' : ''
-                                        ]"
-                                    >
-                                        <div
-                                            :class="[
-                                                'flex flex-col gap-1 max-w-[80%] sm:max-w-[70%]',
-                                                message.user_id === authUser?.id ? 'items-end' : 'items-start'
-                                            ]"
-                                        >
-                                            <div
-                                                :class="[
-                                                    'rounded-lg px-4 py-2',
-                                                    message.user_id === authUser?.id
-                                                        ? 'bg-primary text-primary-foreground'
-                                                        : 'bg-muted'
-                                                ]"
-                                            >
+                                    <div v-for="message in chatMessages" :key="message.id" :class="[
+                                        'flex gap-3',
+                                        message.user_id === authUser?.id ? 'flex-row-reverse' : ''
+                                    ]">
+                                        <div :class="[
+                                            'flex flex-col gap-1 max-w-[80%] sm:max-w-[70%]',
+                                            message.user_id === authUser?.id ? 'items-end' : 'items-start'
+                                        ]">
+                                            <div :class="[
+                                                'rounded-lg px-4 py-2',
+                                                message.user_id === authUser?.id
+                                                    ? 'bg-primary text-primary-foreground'
+                                                    : 'bg-muted'
+                                            ]">
                                                 <p class="text-sm">{{ message.message }}</p>
-                                                <div v-if="message.message_type === 'image' && message.file_path" class="mt-2">
-                                                    <img
-                                                        :src="`/storage/${message.file_path}`"
-                                                        alt="Imagen adjunta"
-                                                        class="max-w-full rounded"
-                                                    />
+                                                <div v-if="message.message_type === 'image' && message.file_path"
+                                                    class="mt-2">
+                                                    <img :src="`/storage/${message.file_path}`" alt="Imagen adjunta"
+                                                        class="max-w-full rounded" />
                                                 </div>
                                             </div>
                                             <div class="flex items-center gap-2 text-xs text-muted-foreground">
@@ -795,16 +772,12 @@ onUnmounted(() => {
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <!-- Input Area -->
                             <div class="border-t p-4">
                                 <form @submit.prevent="sendMessage" class="flex gap-2">
-                                    <Input
-                                        v-model="chatMessageText"
-                                        placeholder="Escribe un mensaje..."
-                                        class="flex-1"
-                                        :disabled="chatLoading"
-                                    />
+                                    <Input v-model="chatMessageText" placeholder="Escribe un mensaje..." class="flex-1"
+                                        :disabled="chatLoading" />
                                     <Button type="submit" :disabled="chatLoading || !chatMessageText.trim()">
                                         <Send class="h-4 w-4" />
                                     </Button>
@@ -834,11 +807,7 @@ onUnmounted(() => {
                                 <SelectValue placeholder="Seleccionar estado" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem
-                                    v-for="option in statusOptions"
-                                    :key="option.value"
-                                    :value="option.value"
-                                >
+                                <SelectItem v-for="option in statusOptions" :key="option.value" :value="option.value">
                                     {{ option.label }}
                                 </SelectItem>
                             </SelectContent>
@@ -850,12 +819,8 @@ onUnmounted(() => {
 
                     <div class="space-y-2">
                         <Label for="status-notes">Notas (opcional)</Label>
-                        <Textarea
-                            id="status-notes"
-                            v-model="statusForm.notes"
-                            placeholder="Agrega notas sobre este cambio de estado..."
-                            rows="3"
-                        />
+                        <Textarea id="status-notes" v-model="statusForm.notes"
+                            placeholder="Agrega notas sobre este cambio de estado..." rows="3" />
                     </div>
 
                     <DialogFooter>
@@ -883,13 +848,8 @@ onUnmounted(() => {
                 <form @submit.prevent="addNotes" class="space-y-4">
                     <div class="space-y-2">
                         <Label for="notes">Notas</Label>
-                        <Textarea
-                            id="notes"
-                            v-model="notesForm.notes"
-                            placeholder="Escribe tus notas aquí..."
-                            rows="5"
-                            required
-                        />
+                        <Textarea id="notes" v-model="notesForm.notes" placeholder="Escribe tus notas aquí..." rows="5"
+                            required />
                         <p v-if="notesForm.errors.notes" class="text-sm text-destructive">
                             {{ notesForm.errors.notes }}
                         </p>
@@ -918,11 +878,8 @@ onUnmounted(() => {
                 </DialogHeader>
 
                 <div class="flex justify-center items-center">
-                    <img
-                        :src="paymentProofUrl"
-                        alt="Comprobante de pago"
-                        class="max-w-full max-h-[70vh] object-contain rounded-lg border"
-                    />
+                    <img :src="paymentProofUrl" alt="Comprobante de pago"
+                        class="max-w-full max-h-[70vh] object-contain rounded-lg border" />
                 </div>
 
                 <DialogFooter>
