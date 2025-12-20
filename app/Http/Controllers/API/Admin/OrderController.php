@@ -23,11 +23,20 @@ class OrderController extends Controller
             $status = $request->get('status', 'all');
             $paymentMethod = $request->get('payment_method');
             $search = $request->get('search');
+            $dateFrom = $request->get('date_from');
+            $dateTo = $request->get('date_to');
 
-            $orders = Order::with(['user:id,name,email,tel', 'address', 'items.product:id,name', 'paymentProof'])
+            $orders = Order::with([
+                'user:id,name,email,tel', 
+                'delivery:id,name,email,tel',
+                'address', 
+                'items.product:id,name', 
+                'paymentProof'
+            ])
                 ->byStatus($status)
                 ->byPaymentMethod($paymentMethod)
                 ->search($search)
+                ->byDateRange($dateFrom, $dateTo)
                 ->recent()
                 ->paginate($perPage);
 
@@ -47,38 +56,91 @@ class OrderController extends Controller
     /**
      * Obtener estadísticas de órdenes para el dashboard.
      *
+     * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function statistics()
+    public function statistics(Request $request)
     {
         try {
+            $dateFrom = $request->get('date_from');
+            $dateTo = $request->get('date_to');
+
+            // Construir query base para estadísticas
+            $baseQuery = Order::query();
+            
+            // Aplicar filtro de fecha si existe
+            if ($dateFrom) {
+                $baseQuery->whereDate('created_at', '>=', $dateFrom);
+            }
+            if ($dateTo) {
+                $baseQuery->whereDate('created_at', '<=', $dateTo);
+            }
+
             $stats = [
-                'total_orders' => Order::count(),
-                'pending_payment' => Order::where('status', 'pending_payment')->count(),
-                'paid' => Order::where('status', 'paid')->count(),
-                'shipped' => Order::where('status', 'shipped')->count(),
-                'completed' => Order::where('status', 'completed')->count(),
-                'cancelled' => Order::where('status', 'cancelled')->count(),
-                'refunded' => Order::where('status', 'refunded')->count(),
-                'total_revenue' => Order::whereIn('status', ['paid', 'shipped', 'completed'])->sum('total'),
-                'pending_revenue' => Order::where('status', 'pending_payment')->sum('total'),
+                'total_orders' => (clone $baseQuery)->count(),
+                'pending_payment' => (clone $baseQuery)->where('status', 'pending_payment')->count(),
+                'paid' => (clone $baseQuery)->where('status', 'paid')->count(),
+                'shipped' => (clone $baseQuery)->where('status', 'shipped')->count(),
+                'completed' => (clone $baseQuery)->where('status', 'completed')->count(),
+                'cancelled' => (clone $baseQuery)->where('status', 'cancelled')->count(),
+                'refunded' => (clone $baseQuery)->where('status', 'refunded')->count(),
+                'total_revenue' => (clone $baseQuery)->whereIn('status', ['paid', 'shipped', 'completed'])->sum('total'),
+                'pending_revenue' => (clone $baseQuery)->where('status', 'pending_payment')->sum('total'),
             ];
 
-            // Órdenes por método de pago
-            $paymentMethods = Order::select('payment_method', DB::raw('count(*) as count'))
-                ->groupBy('payment_method')
-                ->get();
+            // Órdenes por método de pago (con filtro de fecha)
+            $paymentMethodsQuery = Order::select('payment_method', DB::raw('count(*) as count'));
+            if ($dateFrom) {
+                $paymentMethodsQuery->whereDate('created_at', '>=', $dateFrom);
+            }
+            if ($dateTo) {
+                $paymentMethodsQuery->whereDate('created_at', '<=', $dateTo);
+            }
+            $paymentMethods = $paymentMethodsQuery->groupBy('payment_method')->get();
 
-            // Últimas 7 días de órdenes
-            $last7Days = Order::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('count(*) as count'),
-                DB::raw('sum(total) as revenue')
-            )
-                ->where('created_at', '>=', now()->subDays(7))
-                ->groupBy('date')
-                ->orderBy('date', 'desc')
-                ->get();
+            // Determinar rango de fechas para últimos días
+            if ($dateFrom && $dateTo) {
+                $from = \Carbon\Carbon::parse($dateFrom);
+                $to = \Carbon\Carbon::parse($dateTo);
+                $daysDiff = $from->diffInDays($to);
+                
+                // Si el rango es mayor a 90 días, agrupar por meses
+                if ($daysDiff > 90) {
+                    $last7Days = Order::select(
+                        DB::raw('DATE_FORMAT(created_at, "%Y-%m") as date'),
+                        DB::raw('count(*) as count'),
+                        DB::raw('sum(total) as revenue')
+                    )
+                        ->whereDate('created_at', '>=', $dateFrom)
+                        ->whereDate('created_at', '<=', $dateTo)
+                        ->groupBy('date')
+                        ->orderBy('date', 'asc')
+                        ->get();
+                } else {
+                    // Mostrar por días
+                    $last7Days = Order::select(
+                        DB::raw('DATE(created_at) as date'),
+                        DB::raw('count(*) as count'),
+                        DB::raw('sum(total) as revenue')
+                    )
+                        ->whereDate('created_at', '>=', $dateFrom)
+                        ->whereDate('created_at', '<=', $dateTo)
+                        ->groupBy('date')
+                        ->orderBy('date', 'asc')
+                        ->get();
+                }
+            } else {
+                // Sin filtro, mostrar últimos 7 días
+                $last7Days = Order::select(
+                    DB::raw('DATE(created_at) as date'),
+                    DB::raw('count(*) as count'),
+                    DB::raw('sum(total) as revenue')
+                )
+                    ->where('created_at', '>=', now()->subDays(7))
+                    ->groupBy('date')
+                    ->orderBy('date', 'desc')
+                    ->get();
+            }
 
             return response()->json([
                 'success' => true,

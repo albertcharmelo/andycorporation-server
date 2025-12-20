@@ -4,6 +4,7 @@ use App\Http\Controllers\API\AddressController;
 use App\Http\Controllers\API\Admin\ChatController;
 use App\Http\Controllers\API\Admin\DeliveryController;
 use App\Http\Controllers\API\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\API\Admin\PosController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CheckoutController;
@@ -159,6 +160,15 @@ Route::group(['middleware' => ['auth:sanctum', 'role:admin,super_admin'], 'prefi
         Route::post('/{orderId}/read', [ChatController::class, 'markAsRead']);             // Marcar como leído
         Route::get('/{orderId}/unread', [ChatController::class, 'getUnreadCount']);        // Contar no leídos
     });
+
+    // Sistema POS (Point of Sale)
+    Route::prefix('pos')->group(function () {
+        Route::get('/products', [PosController::class, 'getProducts']);                    // Listar productos para POS
+        Route::get('/customers/search', [PosController::class, 'searchCustomer']);        // Buscar cliente por teléfono/cédula
+        Route::get('/customers/{customerId}', [PosController::class, 'getCustomer']);       // Obtener info completa del cliente
+        Route::post('/sales', [PosController::class, 'createSale']);                       // Crear venta POS
+        Route::get('/sales', [PosController::class, 'getSalesHistory']);                  // Historial de ventas POS
+    });
 });
 
 // **********************************
@@ -180,3 +190,7 @@ Route::group(['middleware' => ['auth:sanctum', 'role:delivery'], 'prefix' => 'de
         Route::post('/{orderId}/sos', [DeliveryOrderController::class, 'sos']);          // Activar SOS para un pedido
     });
 });
+
+
+
+        Route::get('/{userId}/assign-role', [DeliveryController::class, 'assignRole']); // Asignar rol delivery a usuario

@@ -1,0 +1,1362 @@
+{
+	"info": {
+		"_postman_id": "andy-corporation-api-2025",
+		"name": "Andy Corporation API",
+		"description": "Colección completa de endpoints para la API de Andy Corporation",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Autenticación",
+			"item": [
+				{
+					"name": "Registro",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Juan Pérez\",\n  \"email\": \"juan@example.com\",\n  \"password\": \"password123\",\n  \"cedula_type\": \"v\",\n  \"cedula_ID\": \"12345678\",\n  \"tel\": \"04121234567\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"juan@example.com\",\n  \"password\": \"password123\",\n  \"type\": \"email\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Usuario",
+			"item": [
+				{
+					"name": "Obtener Usuario",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/user",
+							"host": ["{{base_url}}"],
+							"path": ["user"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Broadcasting Auth",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"socket_id\": \"123.456\",\n  \"channel_name\": \"private-order.1\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/broadcasting/auth",
+							"host": ["{{base_url}}"],
+							"path": ["broadcasting", "auth"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dashboard",
+			"item": [
+				{
+					"name": "Obtener Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["dashboard"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Productos",
+			"item": [
+				{
+					"name": "Listar Productos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products?page=1",
+							"host": ["{{base_url}}"],
+							"path": ["products"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Todos los Productos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/listproducts",
+							"host": ["{{base_url}}"],
+							"path": ["products", "listproducts"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Productos Promocionales",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/promo",
+							"host": ["{{base_url}}"],
+							"path": ["products", "promo"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Productos Populares",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/popularProducts",
+							"host": ["{{base_url}}"],
+							"path": ["products", "popularProducts"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Productos Más Vendidos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/salesProducts",
+							"host": ["{{base_url}}"],
+							"path": ["products", "salesProducts"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Buscar Productos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/searchByName?query=laptop&filters[price][min]=100&filters[price][max]=500&filters[orderBy]=menor_precio",
+							"host": ["{{base_url}}"],
+							"path": ["products", "searchByName"],
+							"query": [
+								{
+									"key": "query",
+									"value": "laptop"
+								},
+								{
+									"key": "filters[price][min]",
+									"value": "100"
+								},
+								{
+									"key": "filters[price][max]",
+									"value": "500"
+								},
+								{
+									"key": "filters[orderBy]",
+									"value": "menor_precio"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Producto",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/1",
+							"host": ["{{base_url}}"],
+							"path": ["products", "1"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Sincronizar Productos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/syncProducts",
+							"host": ["{{base_url}}"],
+							"path": ["products", "syncProducts"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Categorías",
+			"item": [
+				{
+					"name": "Listar Categorías",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/categories",
+							"host": ["{{base_url}}"],
+							"path": ["categories"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Carrito",
+			"item": [
+				{
+					"name": "Añadir Producto",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"product_id\": 1,\n  \"quantity\": 2\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/cart/add",
+							"host": ["{{base_url}}"],
+							"path": ["cart", "add"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Cantidad",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"product_id\": 1,\n  \"quantity\": 3\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/cart/update",
+							"host": ["{{base_url}}"],
+							"path": ["cart", "update"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Eliminar Producto",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"product_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/cart/remove",
+							"host": ["{{base_url}}"],
+							"path": ["cart", "remove"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Ver Carrito",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/cart",
+							"host": ["{{base_url}}"],
+							"path": ["cart"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Direcciones",
+			"item": [
+				{
+					"name": "Crear Dirección",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"address_line_1\": \"Calle Principal 123\",\n  \"address_line_2\": \"Edificio A, Apartamento 4B\",\n  \"name\": \"Casa\",\n  \"referencia\": \"Frente al parque\",\n  \"postal_code\": \"1010\",\n  \"is_default\": true,\n  \"latitude\": 10.4969,\n  \"longitude\": -66.8983\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/addresses/add",
+							"host": ["{{base_url}}"],
+							"path": ["addresses", "add"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Direcciones",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/addresses",
+							"host": ["{{base_url}}"],
+							"path": ["addresses"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Dirección",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/addresses/1",
+							"host": ["{{base_url}}"],
+							"path": ["addresses", "1"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Dirección",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"address_line_1\": \"Nueva Dirección 456\",\n  \"is_default\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/addresses/1",
+							"host": ["{{base_url}}"],
+							"path": ["addresses", "1"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Eliminar Dirección",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/addresses/1",
+							"host": ["{{base_url}}"],
+							"path": ["addresses", "1"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Establecer Dirección por Defecto",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/addresses/1/set-default",
+							"host": ["{{base_url}}"],
+							"path": ["addresses", "1", "set-default"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Calcular Costo de Envío",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"address_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/shipping-cost",
+							"host": ["{{base_url}}"],
+							"path": ["shipping-cost"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Checkout y Órdenes",
+			"item": [
+				{
+					"name": "Crear Orden",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "address_id",
+									"value": "1",
+									"type": "text"
+								},
+								{
+									"key": "payment_method",
+									"value": "manual_transfer",
+									"type": "text"
+								},
+								{
+									"key": "payment_reference",
+									"value": "ABC1234567",
+									"type": "text"
+								},
+								{
+									"key": "notes",
+									"value": "Por favor entregar en la mañana",
+									"type": "text"
+								},
+								{
+									"key": "payment_proof",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/checkout/create-order",
+							"host": ["{{base_url}}"],
+							"path": ["checkout", "create-order"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Resumen de Orden",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/checkout/order-summary/1",
+							"host": ["{{base_url}}"],
+							"path": ["checkout", "order-summary", "1"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Confirmar Pago",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/checkout/confirm-payment/1",
+							"host": ["{{base_url}}"],
+							"path": ["checkout", "confirm-payment", "1"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Órdenes del Usuario",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/orders?status=all&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["orders"],
+							"query": [
+								{
+									"key": "status",
+									"value": "all"
+								},
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Detalle de Orden",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/orders/1",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "1"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Ubicación del Delivery",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/orders/1/delivery-location",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "1", "delivery-location"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Chat de Órdenes",
+			"item": [
+				{
+					"name": "Obtener Mensajes",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/orders/1/chats",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "1", "chats"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Enviar Mensaje",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "message",
+									"value": "Hola, ¿cuándo llegará mi pedido?",
+									"type": "text"
+								},
+								{
+									"key": "message_type",
+									"value": "text",
+									"type": "text"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/orders/1/chats",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "1", "chats"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Marcar como Leído",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/orders/1/chats/mark-read",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "1", "chats", "mark-read"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Estadísticas del Chat",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/orders/1/chats/stats",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "1", "chats", "stats"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Descargar Adjunto",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/orders/1/chats/attachment/1",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "1", "chats", "attachment", "1"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Administración",
+			"item": [
+				{
+					"name": "Órdenes",
+					"item": [
+						{
+							"name": "Listar Órdenes",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/orders?per_page=20&status=all",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "orders"],
+									"query": [
+										{
+											"key": "per_page",
+											"value": "20"
+										},
+										{
+											"key": "status",
+											"value": "all"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Estadísticas de Órdenes",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/orders/statistics",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "orders", "statistics"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Detalle de Orden",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/orders/1",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "orders", "1"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Actualizar Estado",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"status\": \"paid\",\n  \"notes\": \"Pago verificado correctamente\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/admin/orders/1/status",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "orders", "1", "status"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Actualizar Notas",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"notes\": \"Cliente solicitó entrega en la mañana\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/admin/orders/1/notes",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "orders", "1", "notes"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Ver Comprobante de Pago",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/orders/1/payment-proof",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "orders", "1", "payment-proof"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Eliminar Orden",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/orders/1",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "orders", "1"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Órdenes de Usuario",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/orders/user/1",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "orders", "user", "1"]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Deliveries",
+					"item": [
+						{
+							"name": "Listar Deliveries",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/deliveries",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "deliveries"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Crear Delivery",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Delivery Name\",\n  \"email\": \"delivery@example.com\",\n  \"password\": \"password123\",\n  \"tel\": \"04121234567\",\n  \"cedula_type\": \"v\",\n  \"cedula_ID\": \"12345678\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/admin/deliveries",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "deliveries"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Asignar Delivery",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"delivery_id\": 5\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/admin/deliveries/assign/1",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "deliveries", "assign", "1"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Desasignar Delivery",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/deliveries/unassign/1",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "deliveries", "unassign", "1"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Órdenes de Delivery",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/deliveries/5/orders",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "deliveries", "5", "orders"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Eliminar Delivery",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/deliveries/5",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "deliveries", "5"]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Chat",
+					"item": [
+						{
+							"name": "Obtener Mensajes",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/chat/1/messages",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "chat", "1", "messages"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Enviar Mensaje",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"message\": \"Su pedido está en camino\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/admin/chat/1/messages",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "chat", "1", "messages"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Marcar como Leído",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/chat/1/read",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "chat", "1", "read"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Mensajes No Leídos",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/admin/chat/1/unread",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "chat", "1", "unread"]
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Delivery",
+			"item": [
+				{
+					"name": "Listar Órdenes",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{delivery_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/delivery/orders?status=all&sos_only=false",
+							"host": ["{{base_url}}"],
+							"path": ["delivery", "orders"],
+							"query": [
+								{
+									"key": "status",
+									"value": "all"
+								},
+								{
+									"key": "sos_only",
+									"value": "false"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Estado",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{delivery_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"on_the_way\",\n  \"comment\": \"Salí de la agencia\",\n  \"latitude\": 10.4969,\n  \"longitude\": -66.8983\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/delivery/orders/1/update-status",
+							"host": ["{{base_url}}"],
+							"path": ["delivery", "orders", "1", "update-status"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Ubicación",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{delivery_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"latitude\": 10.4969,\n  \"longitude\": -66.8983\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/delivery/orders/1/update-location",
+							"host": ["{{base_url}}"],
+							"path": ["delivery", "orders", "1", "update-location"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Activar SOS",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{delivery_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"comment\": \"Necesito ayuda urgente\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/delivery/orders/1/sos",
+							"host": ["{{base_url}}"],
+							"path": ["delivery", "orders", "1", "sos"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Testing",
+			"item": [
+				{
+					"name": "Enviar Mensaje de Prueba",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/test/send-message/14?message=Hola desde test&user_id=1",
+							"host": ["{{base_url}}"],
+							"path": ["test", "send-message", "14"],
+							"query": [
+								{
+									"key": "message",
+									"value": "Hola desde test"
+								},
+								{
+									"key": "user_id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000/api",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "admin_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "delivery_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+

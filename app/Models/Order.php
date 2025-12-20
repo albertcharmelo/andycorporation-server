@@ -11,6 +11,7 @@ class Order extends Model
 
     protected $fillable = [
         'user_id',
+        'seller_id',
         'delivery_id',
         'address_id',
         'subtotal',
@@ -28,6 +29,18 @@ class Order extends Model
         'current_latitude',
         'current_longitude',
         'location_updated_at',
+        // Campos POS
+        'customer_name',
+        'customer_lastname',
+        'customer_tel',
+        'customer_cedula_type',
+        'customer_cedula_ID',
+        'customer_address',
+        'currency',
+        'amount_bs',
+        'amount_usd',
+        'customer_score',
+        'is_pos_order',
     ];
 
     protected $casts = [
@@ -41,6 +54,10 @@ class Order extends Model
         'location_updated_at' => 'datetime',
         'current_latitude'   => 'decimal:8',
         'current_longitude'  => 'decimal:8',
+        'amount_bs'          => 'decimal:2',
+        'amount_usd'          => 'decimal:2',
+        'customer_score'     => 'integer',
+        'is_pos_order'       => 'boolean',
     ];
 
     /**
@@ -142,6 +159,14 @@ class Order extends Model
     public function delivery()
     {
         return $this->belongsTo(User::class, 'delivery_id');
+    }
+
+    /**
+     * Una orden puede tener un vendedor asignado (POS).
+     */
+    public function seller()
+    {
+        return $this->belongsTo(User::class, 'seller_id');
     }
 
     /**

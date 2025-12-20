@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Events\DeliveryLocationUpdated;
 use App\Models\DeliveryLocation;
 use App\Models\Order;
+use App\Models\OrderStatusHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -310,6 +311,7 @@ class OrderController extends Controller
 
     /**
      * Activar SOS para un pedido.
+     * Registra el SOS en las notas de la orden y actualiza el estado si es necesario.
      *
      * @param Request $request
      * @param int $orderId
@@ -334,22 +336,48 @@ class OrderController extends Controller
                 ], 403);
             }
 
-            // Activar SOS
-            $order->update([
+            // Preparar datos de actualización
+            $updateData = [
                 'sos_status' => true,
                 'sos_comment' => $request->comment,
                 'sos_reported_at' => now(),
+            ];
+
+            // Agregar el SOS a las notas de la orden con timestamp
+            $sosNote = "[" . now()->format('Y-m-d H:i:s') . "] 🚨 SOS ACTIVADO - Delivery: " . $request->comment;
+            $updateData['notes'] = $order->notes
+                ? $order->notes . "\n\n" . $sosNote
+                : $sosNote;
+
+            // Actualizar la orden
+            $order->update($updateData);
+
+            // Registrar en el historial de estados
+            OrderStatusHistory::create([
+                'order_id' => $order->id,
+                'status' => $order->status, // Mantener el estado actual
+                'status_label' => $this->getStatusLabel($order->status) . ' - SOS ACTIVADO',
+                'changed_by_user_id' => $deliveryId,
+                'comment' => 'SOS: ' . $request->comment,
             ]);
 
             DB::commit();
 
+            // Recargar la orden con relaciones
+            $order->refresh();
+            $order->load(['user:id,name', 'address']);
+
             return response()->json([
-                'message' => 'SOS activado exitosamente',
-                'order' => [
+                'success' => true,
+                'message' => 'SOS activado exitosamente. El administrador ha sido notificado.',
+                'data' => [
                     'id' => $order->id,
+                    'numero' => $this->formatOrderNumber($order->id),
                     'sos_status' => true,
                     'sos_comment' => $order->sos_comment,
                     'sos_reported_at' => $order->sos_reported_at->toIso8601String(),
+                    'status' => $this->getStatusLabel($order->status),
+                    'notes_updated' => true,
                 ],
             ]);
         } catch (\Exception $e) {

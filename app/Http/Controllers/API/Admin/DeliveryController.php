@@ -264,4 +264,51 @@ class DeliveryController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Asignar rol delivery a un usuario existente.
+     *
+     * @param int $userId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function assignRole($userId)
+    {
+        DB::beginTransaction();
+        try {
+            $user = User::findOrFail($userId);
+
+            // Verificar si ya tiene el rol delivery
+            if ($user->hasRole('delivery')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario ya tiene el rol delivery',
+                ], 400);
+            }
+
+            // Asignar rol delivery
+            $user->assignRole('delivery');
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Rol delivery asignado exitosamente',
+                'data' => [
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'roles' => $user->getRoleNames()->toArray(),
+                    ],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al asignar rol delivery',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }
