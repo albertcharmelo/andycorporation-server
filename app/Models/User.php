@@ -93,4 +93,26 @@ class User extends Authenticatable
     {
         return $this->hasMany(Message::class);
     }
+
+    /**
+     * Un usuario puede tener muchos cupones.
+     */
+    public function coupons()
+    {
+        return $this->hasMany(UserCoupon::class);
+    }
+
+    /**
+     * Obtener cupones disponibles del usuario.
+     */
+    public function availableCoupons()
+    {
+        return $this->coupons()
+            ->where('status', 'available')
+            ->with('coupon')
+            ->get()
+            ->filter(function ($userCoupon) {
+                return $userCoupon->coupon && $userCoupon->coupon->isValid();
+            });
+    }
 }

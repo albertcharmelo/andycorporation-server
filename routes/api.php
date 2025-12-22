@@ -5,6 +5,9 @@ use App\Http\Controllers\API\Admin\ChatController;
 use App\Http\Controllers\API\Admin\DeliveryController;
 use App\Http\Controllers\API\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\API\Admin\PosController;
+use App\Http\Controllers\API\Admin\PointsConfigController;
+use App\Http\Controllers\API\Admin\CouponController as AdminCouponController;
+use App\Http\Controllers\API\CouponController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CheckoutController;
@@ -124,6 +127,13 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
         Route::get('/{orderId}/chats/stats', [OrderChatController::class, 'getStats']);               // Estadísticas del chat
         Route::get('/{orderId}/chats/attachment/{messageId}', [OrderChatController::class, 'getAttachment']); // Descargar archivo adjunto
     });
+
+    // Cupones del Usuario
+    Route::prefix('coupons')->group(function () {
+        Route::get('/my-coupons', [CouponController::class, 'myCoupons']);                           // Mis cupones
+        Route::get('/{userCouponId}', [CouponController::class, 'show']);                             // Ver cupón específico
+        Route::post('/validate', [CouponController::class, 'validateCoupon']);                         // Validar cupón por código
+    });
 });
 
 // **********************************
@@ -149,6 +159,7 @@ Route::group(['middleware' => ['auth:sanctum', 'role:admin,super_admin'], 'prefi
         Route::post('/', [DeliveryController::class, 'store']);                            // Crear nuevo delivery
         Route::post('/assign/{orderId}', [DeliveryController::class, 'assignToOrder']);    // Asignar delivery a orden
         Route::delete('/unassign/{orderId}', [DeliveryController::class, 'unassignFromOrder']); // Desasignar delivery
+        Route::post('/{userId}/assign-role', [DeliveryController::class, 'assignRole']); // Asignar rol delivery a usuario
         Route::get('/{deliveryId}/orders', [DeliveryController::class, 'getOrders']);      // Órdenes de un delivery
         Route::delete('/{id}', [DeliveryController::class, 'destroy']);                    // Eliminar delivery
     });
@@ -168,6 +179,24 @@ Route::group(['middleware' => ['auth:sanctum', 'role:admin,super_admin'], 'prefi
         Route::get('/customers/{customerId}', [PosController::class, 'getCustomer']);       // Obtener info completa del cliente
         Route::post('/sales', [PosController::class, 'createSale']);                       // Crear venta POS
         Route::get('/sales', [PosController::class, 'getSalesHistory']);                  // Historial de ventas POS
+    });
+
+    // Configuración de Puntos
+    Route::prefix('points-config')->group(function () {
+        Route::get('/', [PointsConfigController::class, 'index']);                        // Obtener configuración
+        Route::put('/', [PointsConfigController::class, 'update']);                        // Actualizar configuración
+        Route::post('/calculate', [PointsConfigController::class, 'calculatePoints']);    // Calcular puntos
+    });
+
+    // Gestión de Cupones (Admin)
+    Route::prefix('coupons')->group(function () {
+        Route::get('/', [AdminCouponController::class, 'index']);                        // Listar cupones
+        Route::post('/', [AdminCouponController::class, 'store']);                        // Crear cupón
+        Route::get('/{id}', [AdminCouponController::class, 'show']);                      // Ver cupón
+        Route::put('/{id}', [AdminCouponController::class, 'update']);                    // Actualizar cupón
+        Route::delete('/{id}', [AdminCouponController::class, 'destroy']);                // Eliminar cupón
+        Route::post('/{couponId}/assign', [AdminCouponController::class, 'assignToUsers']); // Asignar a usuarios
+        Route::get('/{id}/statistics', [AdminCouponController::class, 'statistics']);     // Estadísticas
     });
 });
 
@@ -190,7 +219,3 @@ Route::group(['middleware' => ['auth:sanctum', 'role:delivery'], 'prefix' => 'de
         Route::post('/{orderId}/sos', [DeliveryOrderController::class, 'sos']);          // Activar SOS para un pedido
     });
 });
-
-
-
-        Route::get('/{userId}/assign-role', [DeliveryController::class, 'assignRole']); // Asignar rol delivery a usuario
