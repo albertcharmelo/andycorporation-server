@@ -13,28 +13,6 @@ use Illuminate\Support\Facades\DB;
 class OrderController extends Controller
 {
     /**
-     * Mapeo de estados a labels legibles en español.
-     */
-    private function getStatusLabel($status)
-    {
-        $labels = [
-            'pending_payment' => 'Pago Pendiente',
-            'paid' => 'Pagado',
-            'received' => 'Recibido',
-            'invoiced' => 'Facturado',
-            'in_agency' => 'En Agencia',
-            'shipped' => 'Enviado',
-            'on_the_way' => 'En camino',
-            'delivered' => 'Entregado',
-            'completed' => 'Completado',
-            'cancelled' => 'Cancelado',
-            'refunded' => 'Reembolsado',
-        ];
-
-        return $labels[$status] ?? $status;
-    }
-
-    /**
      * Formatear dirección completa.
      */
     private function formatAddress($address)
@@ -76,7 +54,7 @@ class OrderController extends Controller
             'id' => $order->id,
             'numero' => $this->formatOrderNumber($order->id),
             'usuario' => $order->user->name ?? 'N/A',
-            'status' => $this->getStatusLabel($order->status),
+            'status' => $order->status,
             'direccion' => $this->formatAddress($address),
             'latitud' => $address ? $address->latitude : null,
             'longitud' => $address ? $address->longitude : null,
@@ -356,7 +334,7 @@ class OrderController extends Controller
             OrderStatusHistory::create([
                 'order_id' => $order->id,
                 'status' => $order->status, // Mantener el estado actual
-                'status_label' => $this->getStatusLabel($order->status) . ' - SOS ACTIVADO',
+                'status_label' => $order->status . ' - SOS ACTIVADO',
                 'changed_by_user_id' => $deliveryId,
                 'comment' => 'SOS: ' . $request->comment,
             ]);
@@ -376,7 +354,7 @@ class OrderController extends Controller
                     'sos_status' => true,
                     'sos_comment' => $order->sos_comment,
                     'sos_reported_at' => $order->sos_reported_at->toIso8601String(),
-                    'status' => $this->getStatusLabel($order->status),
+                    'status' => $order->status,
                     'notes_updated' => true,
                 ],
             ]);

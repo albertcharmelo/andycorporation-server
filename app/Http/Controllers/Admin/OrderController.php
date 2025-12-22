@@ -84,7 +84,7 @@ class OrderController extends Controller
                 OrderStatusHistory::create([
                     'order_id' => $order->id,
                     'status' => $request->status,
-                    'status_label' => $this->getStatusLabel($request->status),
+                    'status_label' => $request->status,
                     'changed_by_user_id' => auth()->id(),
                     'comment' => $request->notes,
                 ]);
@@ -99,28 +99,6 @@ class OrderController extends Controller
         }
     }
 
-    /**
-     * Obtener etiqueta del estado.
-     */
-    private function getStatusLabel($status)
-    {
-        $labels = [
-            'pending_payment' => 'Pago Pendiente',
-            'paid' => 'Pagado',
-            'received' => 'Recibido',
-            'invoiced' => 'Facturado',
-            'in_agency' => 'En Agencia',
-            'on_the_way' => 'En Camino',
-            'shipped' => 'Enviado',
-            'delivered' => 'Entregado',
-            'completed' => 'Completado',
-            'cancelled' => 'Cancelado',
-            'refunded' => 'Reembolsado',
-        ];
-
-        return $labels[$status] ?? $status;
-    }
-    
     /**
      * Mostrar detalle de una orden (Inertia) - Inicializar historial si no existe.
      */
@@ -150,7 +128,7 @@ class OrderController extends Controller
             OrderStatusHistory::create([
                 'order_id' => $order->id,
                 'status' => $order->status,
-                'status_label' => $this->getStatusLabel($order->status),
+                'status_label' => $order->status,
                 'changed_by_user_id' => $order->user_id,
                 'comment' => 'Orden creada',
             ]);
