@@ -8,7 +8,6 @@ use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
 
 class OrderController extends Controller
 {
@@ -35,7 +34,7 @@ class OrderController extends Controller
             ->recent()
             ->paginate($perPage);
 
-        return Inertia::render('admin/Orders', [
+        return response()->json([
             'orders' => $orders,
             'filters' => [
                 'status' => $status,
@@ -152,7 +151,7 @@ class OrderController extends Controller
             $order->messages = $order->messages->reverse()->values();
         }
 
-        return Inertia::render('admin/OrderDetail', [
+        return response()->json([
             'order' => $order,
             'chatStats' => $chatStats,
         ]);

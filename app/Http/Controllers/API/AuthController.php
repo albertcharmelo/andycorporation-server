@@ -83,6 +83,10 @@ class AuthController extends Controller
                     'is_admin' => $user->hasAnyRole(['admin', 'super_admin']),
                     'is_delivery' => $user->hasRole('delivery'),
                     'is_client' => $user->hasRole('client') || $user->getRoleNames()->isEmpty(),
+                    'points' => $user->getAvailablePoints(),
+                    'points_formatted' => number_format($user->getAvailablePoints(), 2),
+                    'can_use_points' => $user->getAvailablePoints() >= 100,
+                    'points_discount_available' => $user->calculatePointsDiscount((int) $user->getAvailablePoints()),
                 ]
             ]);
         } catch (\Throwable $th) {
@@ -142,6 +146,10 @@ class AuthController extends Controller
                 'is_admin' => $user->hasAnyRole(['admin', 'super_admin']),
                 'is_delivery' => $user->hasRole('delivery'),
                 'is_client' => $user->hasRole('client') || $user->getRoleNames()->isEmpty(),
+                'points' => $user->getAvailablePoints(),
+                'points_formatted' => number_format($user->getAvailablePoints(), 2),
+                'can_use_points' => $user->getAvailablePoints() >= 100,
+                'points_discount_available' => $user->calculatePointsDiscount((int) $user->getAvailablePoints()),
             ]
         ]);
     }

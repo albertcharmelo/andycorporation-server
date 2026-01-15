@@ -175,9 +175,18 @@ class OrderController extends Controller
                 $updateData['location_updated_at'] = now();
             }
 
-            // Si cambia a delivered, actualizar delivered_at
+            // Si cambia a delivered, actualizar delivered_at y otorgar puntos
             if ($newStatus === 'delivered') {
                 $updateData['delivered_at'] = now();
+                
+                // Otorgar puntos al usuario: 1$ = 0.03 puntos
+                // Solo si la orden no ha otorgado puntos antes
+                if ($order->user && !$order->user->pointTransactions()
+                    ->where('order_id', $order->id)
+                    ->where('type', 'earned')
+                    ->exists()) {
+                    $order->user->earnPoints((float) $order->total, $order->id, "Puntos ganados por orden completada #{$order->id}");
+                }
             }
 
             // Agregar comentario a notas si se proporciona

@@ -30,6 +30,7 @@ class User extends Authenticatable
         'cedula_ID',
         'google_id',
         'avatar',
+        'points',
     ];
 
     /**
@@ -52,6 +53,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password'          => 'hashed',
+            'points'            => 'decimal:2',
         ];
     }
 
@@ -94,25 +96,99 @@ class User extends Authenticatable
         return $this->hasMany(Message::class);
     }
 
+
     /**
-     * Un usuario puede tener muchos cupones.
+     * Transacciones de puntos del usuario.
      */
-    public function coupons()
+    public function pointTransactions()
     {
-        return $this->hasMany(UserCoupon::class);
+        return $this->hasMany(PointTransaction::class);
     }
 
     /**
-     * Obtener cupones disponibles del usuario.
+     * Obtener puntos disponibles del usuario.
      */
-    public function availableCoupons()
+    public function getAvailablePoints(): float
     {
-        return $this->coupons()
-            ->where('status', 'available')
-            ->with('coupon')
-            ->get()
-            ->filter(function ($userCoupon) {
-                return $userCoupon->coupon && $userCoupon->coupon->isValid();
-            });
+        return (float) ($this->points ?? 0);
+    }
+
+    /**
+     * Verificar si el usuario puede usar una cantidad de puntos.
+     * Mínimo 100 puntos para usar.
+     */
+    public function canUsePoints(int $points): bool
+    {
+        $availablePoints = $this->getAvailablePoints();
+        
+        // Mínimo 100 puntos para usar
+        if ($points < 100) {
+            return false;
+        }
+        
+        return $availablePoints >= $points;
+    }
+
+    /**
+     * Usar puntos del usuario.
+     * Retorna true si se usaron correctamente, false si no hay suficientes.
+     */
+    public function usePoints(int $points, ?int $orderId = null, ?string $description = null): bool
+    {
+        if (!$this->canUsePoints($points)) {
+            return false;
+        }
+
+        $this->points = max(0, $this->getAvailablePoints() - $points);
+        $this->save();
+
+        // Registrar transacción
+        PointTransaction::create([
+            'user_id' => $this->id,
+            'order_id' => $orderId,
+            'type' => 'used',
+            'points' => $points,
+            'description' => $description ?? "Puntos usados en orden #{$orderId}",
+            'balance_after' => $this->points,
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Ganar puntos automáticamente.
+     * 1$ = 0.03 puntos
+     */
+    public function earnPoints(float $amount, ?int $orderId = null, ?string $description = null): void
+    {
+        // Calcular puntos: 1$ = 0.03 puntos
+        $pointsEarned = round($amount * 0.03, 2);
+
+        if ($pointsEarned <= 0) {
+            return;
+        }
+
+        $this->points = $this->getAvailablePoints() + $pointsEarned;
+        $this->save();
+
+        // Registrar transacción
+        PointTransaction::create([
+            'user_id' => $this->id,
+            'order_id' => $orderId,
+            'type' => 'earned',
+            'points' => $pointsEarned,
+            'description' => $description ?? "Puntos ganados por orden #{$orderId}",
+            'balance_after' => $this->points,
+        ]);
+    }
+
+    /**
+     * Calcular descuento en dólares basado en puntos.
+     * 100 puntos = 1$ de descuento
+     */
+    public function calculatePointsDiscount(int $points): float
+    {
+        // 100 puntos = 1$ de descuento
+        return round($points / 100, 2);
     }
 }

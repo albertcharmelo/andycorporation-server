@@ -28,6 +28,7 @@ class CheckoutController extends Controller
             'payment_reference' => 'required|string|max:255|unique:orders,payment_reference', // Referencia de pago obligatoria (transferencia bancaria del usuario)
             'notes'             => 'nullable|string|max:1000', // Notas adicionales opcionales
             'payment_proof'    => 'required|file|image|max:2048', // 2048 KB = 2MB
+            'points_used'       => 'nullable|integer|min:0', // Puntos a usar (opcional)
         ]);
 
         $user = $request->user();
@@ -45,9 +46,42 @@ class CheckoutController extends Controller
             $subtotal += $item->quantity * $item->price_at_purchase;
         }
 
-                              // Puedes añadir lógica para calcular shipping_cost aquí si es necesario
+        // Puedes añadir lógica para calcular shipping_cost aquí si es necesario
         $shippingCost = 0.00; // Por ahora, costo de envío fijo
-        $total        = $subtotal + $shippingCost;
+        $totalBeforeDiscount = $subtotal + $shippingCost;
+
+        // Manejar puntos usados
+        $pointsUsed = 0;
+        $pointsDiscount = 0.00;
+        
+        if ($request->has('points_used') && $request->points_used > 0) {
+            $pointsToUse = (int) $request->points_used;
+            
+            // Validar que el usuario tenga suficientes puntos
+            if (!$user->canUsePoints($pointsToUse)) {
+                return response()->json([
+                    'message' => 'No tienes suficientes puntos disponibles. Mínimo 100 puntos requeridos.',
+                    'available_points' => $user->getAvailablePoints(),
+                ], 400);
+            }
+            
+            // Calcular descuento (100 puntos = 1$)
+            $pointsDiscount = $user->calculatePointsDiscount($pointsToUse);
+            
+            // El descuento no puede exceder el total
+            if ($pointsDiscount > $totalBeforeDiscount) {
+                $maxPoints = (int) ($totalBeforeDiscount * 100);
+                return response()->json([
+                    'message' => "El descuento no puede exceder el total de la orden. Máximo: {$maxPoints} puntos.",
+                    'max_points' => $maxPoints,
+                    'order_total' => $totalBeforeDiscount,
+                ], 400);
+            }
+            
+            $pointsUsed = $pointsToUse;
+        }
+        
+        $total = $totalBeforeDiscount - $pointsDiscount;
 
         // Validar que la dirección de envío pertenezca al usuario
         $address = $user->addresses()->find($request->address_id);
@@ -58,13 +92,20 @@ class CheckoutController extends Controller
         try {
             DB::beginTransaction();
 
-            // 2. Crear una nueva instancia de la orden
+            // 2. Usar puntos si se especificaron
+            if ($pointsUsed > 0) {
+                $user->usePoints($pointsUsed, null, "Puntos usados en orden pendiente");
+            }
+
+            // 3. Crear una nueva instancia de la orden
             // payment_reference viene del frontend (referencia de transferencia bancaria del usuario)
             $order = new Order([
                 'user_id'           => $user->id,
                 'address_id'        => $request->address_id,
                 'subtotal'          => $subtotal,
                 'shipping_cost'     => $shippingCost,
+                'points_used'       => $pointsUsed,
+                'points_discount'   => $pointsDiscount,
                 'total'             => $total,
                 'payment_method'    => $request->payment_method,
                 'payment_reference' => $request->payment_reference, // Referencia de pago proporcionada por el usuario
@@ -72,10 +113,20 @@ class CheckoutController extends Controller
                 'notes'             => $request->notes,
             ]);
 
-            // 3. Guardar la orden en la base de datos para obtener el UUID
+            // 4. Guardar la orden en la base de datos para obtener el UUID
             $order->save();
 
-            // 4. Mover ítems del carrito a order_items usando el ID de la orden recién creada
+            // Actualizar la transacción de puntos con el order_id
+            if ($pointsUsed > 0) {
+                $user->pointTransactions()
+                    ->where('type', 'used')
+                    ->whereNull('order_id')
+                    ->latest()
+                    ->first()
+                    ->update(['order_id' => $order->id]);
+            }
+
+            // 5. Mover ítems del carrito a order_items usando el ID de la orden recién creada
             foreach ($cartItems as $item) {
                 OrderItem::create([
                     'order_id'          => $order->id, // Ahora el ID de la orden ya está garantizado
@@ -86,7 +137,7 @@ class CheckoutController extends Controller
                 ]);
             }
 
-            // 5. Subir y guardar el comprobante de pago
+            // 6. Subir y guardar el comprobante de pago
             if ($request->hasFile('payment_proof')) {
                 // Guarda la imagen en el disco público y obtiene la ruta
                 // La imagen se guardará en storage/app/public/payment_proofs
@@ -100,7 +151,7 @@ class CheckoutController extends Controller
                 ]);
             }
 
-            // 5. Vaciar el carrito después de crear la orden
+            // 7. Vaciar el carrito después de crear la orden
             $user->cartItems()->delete();
 
             DB::commit();

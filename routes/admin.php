@@ -26,6 +26,6 @@ Route::middleware(['auth', 'verified', 'role:admin,super_admin'])->prefix('admin
 
     // Página de prueba de Pusher
     Route::get('/pusher-test', function () {
-        return \Inertia\Inertia::render('admin/PusherTest');
+        return response()->json(['message' => 'Pusher test endpoint - use API endpoints for testing']);
     })->name('pusher-test');
 });

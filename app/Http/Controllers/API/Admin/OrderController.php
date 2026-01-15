@@ -220,6 +220,18 @@ class OrderController extends Controller
 
             $order->save();
 
+            // Otorgar puntos cuando la orden se marca como delivered o completed
+            // 1$ = 0.03 puntos
+            if (in_array($request->status, ['delivered', 'completed']) && $order->user) {
+                // Solo otorgar puntos si no se han otorgado antes para esta orden
+                if (!$order->user->pointTransactions()
+                    ->where('order_id', $order->id)
+                    ->where('type', 'earned')
+                    ->exists()) {
+                    $order->user->earnPoints((float) $order->total, $order->id, "Puntos ganados por orden completada #{$order->id}");
+                }
+            }
+
             DB::commit();
 
             return response()->json([

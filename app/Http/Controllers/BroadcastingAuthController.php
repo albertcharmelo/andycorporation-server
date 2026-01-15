@@ -61,9 +61,11 @@ class BroadcastingAuthController extends Controller
             ], 403);
         }
 
-        // IMPORTANTE: Establecer el usuario en el guard por defecto
-        // para que Broadcast::auth() pueda acceder a él
+        // IMPORTANTE: Establecer el usuario en ambos guards
+        // para que Broadcast::auth() y las validaciones de canales puedan acceder a él
         Auth::setUser($user);
+        Auth::guard('sanctum')->setUser($user);
+        Auth::guard('web')->setUser($user);
 
         // Usar Laravel Broadcasting para generar la respuesta de autenticación
         // Esto maneja automáticamente la firma y la validación del canal

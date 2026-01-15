@@ -7,7 +7,6 @@ use App\Models\Product;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
@@ -84,6 +83,6 @@ class DashboardController extends Controller
                 ->get();
         }
 
-        return Inertia::render('Dashboard', $dashboardData);
+        return response()->json($dashboardData);
     }
 }

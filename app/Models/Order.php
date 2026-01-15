@@ -41,9 +41,9 @@ class Order extends Model
         'amount_usd',
         'customer_score',
         'is_pos_order',
-        // Campos de cupones
-        'coupon_id',
-        'discount_amount',
+        // Campos de puntos
+        'points_used',
+        'points_discount',
     ];
 
     protected $casts = [
@@ -61,7 +61,8 @@ class Order extends Model
         'amount_usd'          => 'decimal:2',
         'customer_score'     => 'integer',
         'is_pos_order'       => 'boolean',
-        'discount_amount'    => 'decimal:2',
+        'points_used'        => 'decimal:2',
+        'points_discount'    => 'decimal:2',
     ];
 
     /**
@@ -173,13 +174,6 @@ class Order extends Model
         return $this->belongsTo(User::class, 'seller_id');
     }
 
-    /**
-     * Una orden puede tener un cupón aplicado.
-     */
-    public function coupon()
-    {
-        return $this->belongsTo(Coupon::class);
-    }
 
     /**
      * Una orden tiene muchas ubicaciones de delivery (historial de tracking).

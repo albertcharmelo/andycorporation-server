@@ -6,8 +6,7 @@ use App\Http\Controllers\API\Admin\DeliveryController;
 use App\Http\Controllers\API\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\API\Admin\PosController;
 use App\Http\Controllers\API\Admin\PointsConfigController;
-use App\Http\Controllers\API\Admin\CouponController as AdminCouponController;
-use App\Http\Controllers\API\CouponController;
+use App\Http\Controllers\API\PointController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CheckoutController;
@@ -16,6 +15,9 @@ use App\Http\Controllers\API\OrderChatController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
+
+Route::get('syncProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'syncProducts']);
+
 
 Route::get('/user', function (Request $request) {
     $user = $request->user();
@@ -26,6 +28,9 @@ Route::get('/user', function (Request $request) {
         ], 401);
     }
     
+    // Refrescar el usuario desde la base de datos para obtener los puntos actualizados
+    $user->refresh();
+    
     return [
         'user' => [
             ...$user->toArray(),
@@ -33,6 +38,10 @@ Route::get('/user', function (Request $request) {
             'is_admin' => $user->hasAnyRole(['admin', 'super_admin']),
             'is_delivery' => $user->hasRole('delivery'),
             'is_client' => $user->hasRole('client') || $user->getRoleNames()->isEmpty(),
+            'points' => $user->getAvailablePoints(),
+            'points_formatted' => number_format($user->getAvailablePoints(), 2),
+            'can_use_points' => $user->getAvailablePoints() >= 100,
+            'points_discount_available' => $user->calculatePointsDiscount((int) $user->getAvailablePoints()),
         ],
         'message' => 'Welcome to the API',
     ];
@@ -128,11 +137,11 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
         Route::get('/{orderId}/chats/attachment/{messageId}', [OrderChatController::class, 'getAttachment']); // Descargar archivo adjunto
     });
 
-    // Cupones del Usuario
-    Route::prefix('coupons')->group(function () {
-        Route::get('/my-coupons', [CouponController::class, 'myCoupons']);                           // Mis cupones
-        Route::get('/{userCouponId}', [CouponController::class, 'show']);                             // Ver cupón específico
-        Route::post('/validate', [CouponController::class, 'validateCoupon']);                         // Validar cupón por código
+    // Puntos del Usuario
+    Route::prefix('points')->group(function () {
+        Route::get('/', [PointController::class, 'index']);                                            // Obtener puntos disponibles
+        Route::get('/transactions', [PointController::class, 'transactions']);                        // Historial de transacciones
+        Route::post('/validate', [PointController::class, 'validatePoints']);                          // Validar puntos antes de checkout
     });
 });
 
@@ -188,15 +197,10 @@ Route::group(['middleware' => ['auth:sanctum', 'role:admin,super_admin'], 'prefi
         Route::post('/calculate', [PointsConfigController::class, 'calculatePoints']);    // Calcular puntos
     });
 
-    // Gestión de Cupones (Admin)
-    Route::prefix('coupons')->group(function () {
-        Route::get('/', [AdminCouponController::class, 'index']);                        // Listar cupones
-        Route::post('/', [AdminCouponController::class, 'store']);                        // Crear cupón
-        Route::get('/{id}', [AdminCouponController::class, 'show']);                      // Ver cupón
-        Route::put('/{id}', [AdminCouponController::class, 'update']);                    // Actualizar cupón
-        Route::delete('/{id}', [AdminCouponController::class, 'destroy']);                // Eliminar cupón
-        Route::post('/{couponId}/assign', [AdminCouponController::class, 'assignToUsers']); // Asignar a usuarios
-        Route::get('/{id}/statistics', [AdminCouponController::class, 'statistics']);     // Estadísticas
+    // Gestión de Puntos (Admin)
+    Route::prefix('points')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\Admin\PointController::class, 'index']);           // Listar puntos de usuarios
+        Route::get('/{userId}', [\App\Http\Controllers\API\Admin\PointController::class, 'show']);   // Ver puntos de un usuario
     });
 });
 

@@ -27,32 +27,75 @@ Broadcast::channel('order.{orderId}', function ($user, $orderId) {
         $user = \Illuminate\Support\Facades\Auth::user();
     }
 
+    // Si aún no hay usuario, intentar con el guard web
+    if (!$user) {
+        $user = \Illuminate\Support\Facades\Auth::guard('web')->user();
+    }
+
     // DEBUGGING: Log detallado
-    Log::info('[Broadcasting Auth] Verificando acceso', [
+    Log::info('[Broadcasting Channel] Verificando acceso a orden', [
         'user_id' => $user ? $user->id : null,
         'user_email' => $user ? $user->email : null,
         'order_id' => $orderId,
         'timestamp' => now(),
-        'user_from_param' => $user !== null ? 'yes' : 'no',
-        'user_from_sanctum' => \Illuminate\Support\Facades\Auth::guard('sanctum')->check(),
     ]);
 
-    // TEMPORAL: Permitir acceso a todos los usuarios autenticados para debugging
-    // Una vez que funcione, descomentar la lógica completa abajo
-    if ($user) {
-        Log::info('[Broadcasting Auth] ✅ Usuario autenticado - ACCESO PERMITIDO (modo debug)', [
+    // Si no hay usuario autenticado, denegar acceso
+    if (!$user) {
+        Log::warning('[Broadcasting Channel] ❌ Usuario NO autenticado', [
+            'order_id' => $orderId,
+        ]);
+        return false;
+    }
+
+    // Verificar que el usuario tenga acceso a la orden
+    // El usuario puede acceder si:
+    // 1. Es el dueño de la orden
+    // 2. Es admin o super_admin
+    // 3. Es el delivery asignado a la orden
+    $order = \App\Models\Order::find($orderId);
+    
+    if (!$order) {
+        Log::warning('[Broadcasting Channel] ❌ Orden no encontrada', [
+            'order_id' => $orderId,
+            'user_id' => $user->id,
+        ]);
+        return false;
+    }
+
+    $hasAccess = false;
+    
+    // El dueño de la orden puede acceder
+    if ($order->user_id === $user->id) {
+        $hasAccess = true;
+    }
+    
+    // Admin o super_admin pueden acceder
+    if ($user->hasAnyRole(['admin', 'super_admin'])) {
+        $hasAccess = true;
+    }
+    
+    // El delivery asignado puede acceder
+    if ($order->delivery_id === $user->id) {
+        $hasAccess = true;
+    }
+
+    if ($hasAccess) {
+        Log::info('[Broadcasting Channel] ✅ Acceso permitido', [
             'user_id' => $user->id,
             'order_id' => $orderId,
         ]);
-         return (bool) $user;
+        return true;
     }
 
-    Log::warning('[Broadcasting Auth] ❌ Usuario NO autenticado', [
+    Log::warning('[Broadcasting Channel] ❌ Acceso denegado', [
+        'user_id' => $user->id,
         'order_id' => $orderId,
+        'order_user_id' => $order->user_id,
+        'order_delivery_id' => $order->delivery_id,
     ]);
-    return false;
-
     
+    return false;
 });
 
 // Canal privado para notificaciones de usuario (formato: private-user.{userId})

@@ -29,10 +29,10 @@ class CartController extends Controller
             $product = Product::find($productId);
 
             // Validar si el producto tiene suficiente stock (opcional pero recomendado)
-            if ($product->stock_quantity !== null && $product->stock_quantity < $quantity) {
-                DB::rollBack();
-                return response()->json(['message' => 'No hay suficiente stock disponible para este producto.'], 400);
-            }
+            // if ($product->stock_quantity !== null && $product->stock_quantity < $quantity) {
+            //     DB::rollBack();
+            //     return response()->json(['message' => 'No hay suficiente stock disponible para este producto.'], 400);
+            // }
 
             // Buscar si el producto ya está en el carrito del usuario
             $cartItem = CartItem::where('user_id', $user->id)
