@@ -7,6 +7,7 @@ use App\Http\Controllers\API\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\API\Admin\PosController;
 use App\Http\Controllers\API\Admin\PointsConfigController;
 use App\Http\Controllers\API\PointController;
+use App\Http\Controllers\API\PushTokenController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CheckoutController;
@@ -143,6 +144,12 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
         Route::get('/transactions', [PointController::class, 'transactions']);                        // Historial de transacciones
         Route::post('/validate', [PointController::class, 'validatePoints']);                          // Validar puntos antes de checkout
     });
+
+    // Push Tokens (Notificaciones)
+    Route::prefix('push-tokens')->group(function () {
+        Route::post('/register', [PushTokenController::class, 'register']);                          // Registrar/actualizar token push
+        Route::delete('/{token}', [PushTokenController::class, 'delete']);                             // Eliminar token push
+    });
 });
 
 // **********************************
@@ -173,6 +180,12 @@ Route::group(['middleware' => ['auth:sanctum', 'role:admin,super_admin'], 'prefi
         Route::delete('/{id}', [DeliveryController::class, 'destroy']);                    // Eliminar delivery
     });
 
+    // Gestión de Clientes
+    Route::prefix('clients')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\Admin\UserController::class, 'index']);  // Listar todos los clientes
+        Route::get('/{id}', [\App\Http\Controllers\API\Admin\UserController::class, 'show']); // Ver detalle de cliente
+    });
+
     // Chat de Órdenes
     Route::prefix('chat')->group(function () {
         Route::get('/{orderId}/messages', [ChatController::class, 'getMessages']);         // Obtener mensajes de una orden
@@ -201,6 +214,13 @@ Route::group(['middleware' => ['auth:sanctum', 'role:admin,super_admin'], 'prefi
     Route::prefix('points')->group(function () {
         Route::get('/', [\App\Http\Controllers\API\Admin\PointController::class, 'index']);           // Listar puntos de usuarios
         Route::get('/{userId}', [\App\Http\Controllers\API\Admin\PointController::class, 'show']);   // Ver puntos de un usuario
+    });
+
+    // Gestión de Almacenamiento
+    Route::prefix('storage')->group(function () {
+        Route::get('/verify', [\App\Http\Controllers\API\Admin\StorageController::class, 'verify']);  // Verificar configuración de almacenamiento
+        Route::get('/payment-proofs', [\App\Http\Controllers\API\Admin\StorageController::class, 'listPaymentProofs']);  // Listar todos los comprobantes
+        Route::get('/payment-proofs/{orderId}', [\App\Http\Controllers\API\Admin\StorageController::class, 'verifyPaymentProof']);  // Verificar comprobante específico
     });
 });
 

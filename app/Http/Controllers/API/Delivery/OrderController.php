@@ -82,18 +82,65 @@ class OrderController extends Controller
 
             // Construir query base
             $query = Order::with(['user:id,name', 'address', 'items.product:id,name'])
-                ->where('delivery_id', $deliveryId)
-                ->orderBy('created_at', 'desc');
+                ->where('delivery_id', $deliveryId);
 
-            // Filtro por estado
+            // Filtro por período de fecha (basado en assigned_at)
+            $datePeriod = $request->get('date_period', 'today');
+            
+            if ($datePeriod !== 'all') {
+                $now = now();
+                
+                switch ($datePeriod) {
+                    case 'today':
+                        $query->whereNotNull('assigned_at')
+                              ->whereDate('assigned_at', $now->toDateString());
+                        break;
+                    case 'yesterday':
+                        $yesterday = $now->copy()->subDay();
+                        $query->whereNotNull('assigned_at')
+                              ->whereDate('assigned_at', $yesterday->toDateString());
+                        break;
+                    case 'week':
+                        $startOfWeek = $now->copy()->startOfWeek();
+                        $query->whereNotNull('assigned_at')
+                              ->where('assigned_at', '>=', $startOfWeek);
+                        break;
+                }
+            } else {
+                // Para "Todos", incluir solo órdenes con assigned_at (asignadas)
+                $query->whereNotNull('assigned_at');
+            }
+
+            // Filtro por estado - Solo estados relevantes para delivery
+            // Las órdenes ya están filtradas por delivery_id, así que todas son asignadas a este delivery
+            
             if ($request->has('status') && $request->status !== 'all' && $request->status !== '') {
-                $query->where('status', $request->status);
+                $status = $request->status;
+                
+                if ($status === 'in_agency') {
+                    // "En Agencia" = todas las órdenes asignadas que NO están "en camino" ni "completadas"
+                    // Cualquier orden asignada que no esté en ruta o completada está en agencia
+                    $query->whereNotIn('status', ['on_the_way', 'delivered', 'completed']);
+                } elseif ($status === 'on_the_way') {
+                    // "En camino" = órdenes con estado on_the_way
+                    $query->where('status', 'on_the_way');
+                } elseif ($status === 'delivered') {
+                    // "Entregado" = órdenes completadas o entregadas
+                    $query->whereIn('status', ['delivered', 'completed']);
+                }
+            } else {
+                // Si no se especifica estado, mostrar todas las órdenes asignadas que no están completadas/canceladas
+                // Esto incluye: en agencia, en camino, y entregadas
+                $query->whereNotIn('status', ['cancelled', 'refunded']);
             }
 
             // Filtro por SOS
             if ($request->boolean('sos_only')) {
                 $query->where('sos_status', true);
             }
+
+            // Ordenar por fecha de asignación descendente
+            $query->orderBy('assigned_at', 'desc');
 
             // Obtener órdenes
             $orders = $query->get();
@@ -175,18 +222,10 @@ class OrderController extends Controller
                 $updateData['location_updated_at'] = now();
             }
 
-            // Si cambia a delivered, actualizar delivered_at y otorgar puntos
+            // Si cambia a delivered, actualizar delivered_at
+            // Nota: Los puntos se otorgan cuando el status cambia a 'paid', no cuando se entrega
             if ($newStatus === 'delivered') {
                 $updateData['delivered_at'] = now();
-                
-                // Otorgar puntos al usuario: 1$ = 0.03 puntos
-                // Solo si la orden no ha otorgado puntos antes
-                if ($order->user && !$order->user->pointTransactions()
-                    ->where('order_id', $order->id)
-                    ->where('type', 'earned')
-                    ->exists()) {
-                    $order->user->earnPoints((float) $order->total, $order->id, "Puntos ganados por orden completada #{$order->id}");
-                }
             }
 
             // Agregar comentario a notas si se proporciona

@@ -4,8 +4,12 @@ namespace App\Http\Controllers\API\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\Message;
+use App\Events\OrderMessageSent;
+use App\Services\ExpoPushNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class OrderController extends Controller
@@ -220,19 +224,96 @@ class OrderController extends Controller
 
             $order->save();
 
-            // Otorgar puntos cuando la orden se marca como delivered o completed
+            // Crear mensaje del sistema cuando cambia el estado
+            $statusMessages = [
+                'pending_payment' => 'La orden está pendiente de pago',
+                'paid' => 'La orden ha sido pagada y está siendo procesada',
+                'shipped' => 'La orden ha sido enviada',
+                'completed' => 'La orden ha sido completada',
+                'cancelled' => 'La orden ha sido cancelada',
+                'refunded' => 'La orden ha sido reembolsada',
+            ];
+
+            $systemMessage = Message::create([
+                'order_id' => $order->id,
+                'user_id' => null, // Mensaje del sistema no tiene usuario
+                'message' => $statusMessages[$request->status] ?? "La orden ha cambiado de estado a: {$request->status}",
+                'is_system' => true,
+                'system_message_type' => 'status_change',
+            ]);
+
+            // Emitir evento de broadcasting para el mensaje del sistema
+            try {
+                // Para mensajes del sistema, pasamos null como sender
+                // El evento manejará esto correctamente
+                broadcast(new OrderMessageSent($systemMessage, null, $order));
+            } catch (\Exception $e) {
+                Log::error('Error al emitir evento de mensaje del sistema', [
+                    'error' => $e->getMessage(),
+                    'order_id' => $order->id,
+                ]);
+            }
+
+            // Otorgar puntos cuando la orden se marca como 'paid'
             // 1$ = 0.03 puntos
-            if (in_array($request->status, ['delivered', 'completed']) && $order->user) {
+            if ($request->status === 'paid' && $order->user) {
                 // Solo otorgar puntos si no se han otorgado antes para esta orden
                 if (!$order->user->pointTransactions()
                     ->where('order_id', $order->id)
                     ->where('type', 'earned')
                     ->exists()) {
-                    $order->user->earnPoints((float) $order->total, $order->id, "Puntos ganados por orden completada #{$order->id}");
+                    $pointsEarned = $order->user->earnPoints((float) $order->total, $order->id, "Puntos ganados por orden pagada #{$order->id}");
+                    // Guardar puntos ganados en la orden
+                    $order->points_earned = $pointsEarned;
+                    $order->save();
                 }
             }
 
             DB::commit();
+
+            // Enviar notificación push al usuario si el estado cambió a uno importante
+            if (in_array($request->status, ['paid', 'shipped', 'completed', 'cancelled']) && $order->user) {
+                try {
+                    $notificationService = new ExpoPushNotificationService();
+                    
+                    // Títulos y mensajes según el estado
+                    $titles = [
+                        'paid' => 'Orden pagada',
+                        'shipped' => 'Orden enviada',
+                        'completed' => 'Orden completada',
+                        'cancelled' => 'Orden cancelada',
+                    ];
+                    
+                    $messages = [
+                        'paid' => "Tu orden #{$order->id} ha sido pagada y está siendo procesada",
+                        'shipped' => "Tu orden #{$order->id} ha sido enviada",
+                        'completed' => "Tu orden #{$order->id} ha sido completada",
+                        'cancelled' => "Tu orden #{$order->id} ha sido cancelada",
+                    ];
+                    
+                    $title = $titles[$request->status] ?? 'Estado de orden actualizado';
+                    $body = $messages[$request->status] ?? "Tu orden #{$order->id} ha cambiado de estado";
+                    
+                    $notificationService->sendToUser(
+                        $order->user_id,
+                        $title,
+                        $body,
+                        [
+                            'type' => 'order_status_changed',
+                            'order_id' => $order->id,
+                            'status' => $request->status,
+                        ]
+                    );
+                } catch (\Exception $e) {
+                    // No fallar la actualización del estado si la notificación falla
+                    Log::error('Error al enviar notificación push de cambio de estado', [
+                        'order_id' => $order->id,
+                        'user_id' => $order->user_id,
+                        'status' => $request->status,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -309,23 +390,92 @@ class OrderController extends Controller
                 ], 404);
             }
 
-            // Generar URL temporal del comprobante
-            $url = Storage::url($order->paymentProof->file_path);
+            $proof = $order->paymentProof;
+            $filePath = $proof->file_path;
+            $fullPath = storage_path('app/public/' . $filePath);
+
+            // Verificar que el archivo existe físicamente
+            $exists = file_exists($fullPath);
+            
+            if (!$exists) {
+                Log::warning('Comprobante de pago no encontrado en el sistema de archivos', [
+                    'order_id' => $order->id,
+                    'file_path' => $filePath,
+                    'full_path' => $fullPath,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El archivo del comprobante de pago no se encuentra en el servidor',
+                    'data' => [
+                        'payment_proof' => $proof,
+                        'file_path' => $filePath,
+                        'exists' => false,
+                    ],
+                ], 404);
+            }
+
+            // Obtener información del archivo
+            $fileSize = filesize($fullPath);
+            $fileName = basename($filePath);
+            $fileExtension = pathinfo($fileName, PATHINFO_EXTENSION);
+            $mimeType = mime_content_type($fullPath);
+
+            // Generar URL del comprobante
+            $url = Storage::url($filePath);
+
+            // Verificar si el archivo es accesible públicamente (symlink)
+            $publicPath = public_path('storage/' . $filePath);
+            $publiclyAccessible = file_exists($publicPath) || is_link(public_path('storage'));
 
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'payment_proof' => $order->paymentProof,
+                    'payment_proof' => $proof,
+                    'file_path' => $filePath,
+                    'file_name' => $fileName,
+                    'file_size' => $fileSize,
+                    'file_size_human' => $this->formatBytes($fileSize),
+                    'file_extension' => $fileExtension,
+                    'mime_type' => $mimeType,
                     'url' => $url,
+                    'exists' => true,
+                    'publicly_accessible' => $publiclyAccessible,
+                    'full_path' => $fullPath,
+                    'public_path' => $publicPath,
                 ],
             ]);
         } catch (\Exception $e) {
+            Log::error('Error al obtener el comprobante de pago', [
+                'order_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener el comprobante de pago',
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Formatear bytes a formato legible.
+     *
+     * @param int $bytes
+     * @param int $precision
+     * @return string
+     */
+    private function formatBytes($bytes, $precision = 2)
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+        for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
+            $bytes /= 1024;
+        }
+
+        return round($bytes, $precision) . ' ' . $units[$i];
     }
 
     /**

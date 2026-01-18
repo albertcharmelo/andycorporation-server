@@ -6,6 +6,7 @@ use App\Events\OrderMessageSent;
 use App\Models\Message;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\ExpoPushNotificationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -173,6 +174,64 @@ class SendOrderMessage implements ShouldQueue
                         'pusher_app_id' => config('broadcasting.connections.pusher.app_id'),
                         'pusher_cluster' => config('broadcasting.connections.pusher.options.cluster'),
                     ]);
+
+                    // Enviar notificación push a los otros usuarios de la orden (no al que envió el mensaje)
+                    try {
+                        $notificationService = new ExpoPushNotificationService();
+                        
+                        // Determinar a quién enviar la notificación
+                        // Si el mensaje es del cliente, notificar a admin/delivery
+                        // Si el mensaje es de admin/delivery, notificar al cliente
+                        $usersToNotify = [];
+                        
+                        if ($userRole === 'client') {
+                            // Notificar a admin y delivery si están asignados
+                            if ($order->delivery_id && $order->delivery_id !== $this->userId) {
+                                $usersToNotify[] = $order->delivery_id;
+                            }
+                            // También notificar a admins (opcional, puede ser demasiadas notificaciones)
+                            // Por ahora solo notificamos al delivery si está asignado
+                        } else {
+                            // Si es admin o delivery, notificar al cliente
+                            if ($order->user_id && $order->user_id !== $this->userId) {
+                                $usersToNotify[] = $order->user_id;
+                            }
+                        }
+                        
+                        // Truncar mensaje para la notificación (máximo 100 caracteres)
+                        $messagePreview = mb_strlen($this->messageText) > 100 
+                            ? mb_substr($this->messageText, 0, 100) . '...' 
+                            : $this->messageText;
+                        
+                        // Enviar notificación a cada usuario
+                        foreach ($usersToNotify as $userIdToNotify) {
+                            if ($userIdToNotify !== $this->userId) { // No notificar al que envió el mensaje
+                                $notificationService->sendToUser(
+                                    $userIdToNotify,
+                                    'Nuevo mensaje - Orden #' . $order->order_number,
+                                    $messagePreview,
+                                    [
+                                        'type' => 'new_message',
+                                        'order_id' => $order->id,
+                                        'order_number' => $order->order_number,
+                                    ]
+                                );
+                                
+                                Log::info('SendOrderMessage: Notificación push enviada', [
+                                    'to_user_id' => $userIdToNotify,
+                                    'order_id' => $this->orderId,
+                                    'from_user_id' => $this->userId,
+                                ]);
+                            }
+                        }
+                    } catch (\Exception $notificationException) {
+                        // No fallar el job si la notificación falla
+                        Log::error('SendOrderMessage: Error al enviar notificación push', [
+                            'error' => $notificationException->getMessage(),
+                            'order_id' => $this->orderId,
+                            'trace' => $notificationException->getTraceAsString(),
+                        ]);
+                    }
                 } catch (\Exception $broadcastException) {
                     Log::error('SendOrderMessage: Error al enviar evento al broadcaster', [
                         'error' => $broadcastException->getMessage(),

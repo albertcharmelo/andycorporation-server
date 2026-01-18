@@ -68,6 +68,13 @@ class AuthController extends Controller
             );
             ## Asignar rol cliente usando Spatie
             $user->assignRole('client');
+            
+            ## Asignar órdenes pre-registradas si el usuario tiene teléfono o cédula
+            $assignedOrders = [];
+            if ($user->tel || $user->cedula_ID) {
+                $assignedOrders = $user->assignPreRegisteredOrders();
+            }
+            
             DB::commit();
 
             ## Enviar correo de confirmación

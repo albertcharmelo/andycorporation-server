@@ -7,8 +7,11 @@ use App\Models\OrderItem;
 use App\Models\PaymentProof;
 use App\Models\DeliveryLocation;
 use App\Models\UserAddress; // Para validar la dirección de envío
+use App\Services\ExpoPushNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class CheckoutController extends Controller
 {
@@ -24,7 +27,7 @@ class CheckoutController extends Controller
         // Validar los datos de la solicitud
         $request->validate([
             'address_id'        => 'required|exists:user_addresses,id',  // Debe ser una dirección existente
-            'payment_method'    => 'required|string|in:manual_transfer', // Método de pago esperado
+            'payment_method'    => 'required|string|in:manual_transfer,mobile_payment,pago_movil,zelle,paypal,binance,bank_transfer,agree_with_seller,credit_card', // Método de pago esperado
             'payment_reference' => 'required|string|max:255|unique:orders,payment_reference', // Referencia de pago obligatoria (transferencia bancaria del usuario)
             'notes'             => 'nullable|string|max:1000', // Notas adicionales opcionales
             'payment_proof'    => 'required|file|image|max:2048', // 2048 KB = 2MB
@@ -138,17 +141,54 @@ class CheckoutController extends Controller
             }
 
             // 6. Subir y guardar el comprobante de pago
+            $paymentProofData = null;
             if ($request->hasFile('payment_proof')) {
                 // Guarda la imagen en el disco público y obtiene la ruta
                 // La imagen se guardará en storage/app/public/payment_proofs
                 $filePath = $request->file('payment_proof')->store('payment_proofs', 'public');
 
+                // Validar que el archivo se guardó correctamente
+                if (!$filePath) {
+                    throw new \Exception('Error al guardar el comprobante de pago');
+                }
+
+                // Verificar que el archivo existe físicamente
+                $fullPath = storage_path('app/public/' . $filePath);
+                if (!file_exists($fullPath)) {
+                    throw new \Exception('El archivo no se guardó correctamente en el servidor');
+                }
+
+                // Obtener información del archivo
+                $fileSize = filesize($fullPath);
+                $fileName = basename($filePath);
+
+                // Generar URL del archivo
+                $fileUrl = Storage::url($filePath);
+
+                // Log de la operación
+                Log::info('Comprobante de pago guardado', [
+                    'order_id' => $order->id,
+                    'file_path' => $filePath,
+                    'file_name' => $fileName,
+                    'file_size' => $fileSize,
+                    'url' => $fileUrl,
+                ]);
+
                 // Registra la información del comprobante en la nueva tabla
-                PaymentProof::create([
+                $paymentProof = PaymentProof::create([
                     'order_id'  => $order->id,
                     'file_path' => $filePath,
                     'notes'     => $request->notes,
                 ]);
+
+                $paymentProofData = [
+                    'file_path' => $filePath,
+                    'file_name' => $fileName,
+                    'file_size' => $fileSize,
+                    'file_size_human' => $this->formatBytes($fileSize),
+                    'url' => $fileUrl,
+                    'exists' => true,
+                ];
             }
 
             // 7. Vaciar el carrito después de crear la orden
@@ -159,9 +199,31 @@ class CheckoutController extends Controller
                                                                                   // Se puede extender para cargar más detalles si es necesario para el resumen
             $order = Order::with(['items.product', 'address'])->find($order->id); // Recarga la orden con relaciones
 
+            // 8. Enviar notificación push al usuario
+            try {
+                $notificationService = new ExpoPushNotificationService();
+                $notificationService->sendToUser(
+                    $user->id,
+                    'Compra realizada',
+                    "Tu orden #{$order->id} ha sido creada exitosamente",
+                    [
+                        'type' => 'order_created',
+                        'order_id' => $order->id,
+                    ]
+                );
+            } catch (\Exception $e) {
+                // No fallar la creación de la orden si la notificación falla
+                Log::error('Error al enviar notificación push de orden creada', [
+                    'order_id' => $order->id,
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             return response()->json([
                 'message'              => 'Orden creada exitosamente. Pago pendiente.',
                 'order'                => $order->toArray(), // Convierte el modelo a array para JSON
+                'payment_proof'        => $paymentProofData, // Información del comprobante guardado
                 'payment_instructions' => [
                     'method'    => 'Transferencia Bancaria',
                     'reference' => $order->payment_reference,
@@ -233,6 +295,19 @@ class CheckoutController extends Controller
             // 3. Actualizar el estado de la orden a 'paid'
             $order->status = 'paid';
             $order->save();
+
+            // 4. Otorgar puntos cuando se confirma el pago
+            // 1$ = 0.03 puntos
+            // Solo otorgar puntos si no se han otorgado antes para esta orden
+            if (!$user->pointTransactions()
+                ->where('order_id', $order->id)
+                ->where('type', 'earned')
+                ->exists()) {
+                $pointsEarned = $user->earnPoints((float) $order->total, $order->id, "Puntos ganados por orden pagada #{$order->id}");
+                // Guardar puntos ganados en la orden
+                $order->points_earned = $pointsEarned;
+                $order->save();
+            }
 
             DB::commit();
 
@@ -412,6 +487,24 @@ class CheckoutController extends Controller
             'has_location' => $currentLocation !== null,
             'last_updated' => $order->location_updated_at ? $order->location_updated_at->toISOString() : null,
         ], 200);
+    }
+
+    /**
+     * Formatear bytes a formato legible.
+     *
+     * @param int $bytes
+     * @param int $precision
+     * @return string
+     */
+    private function formatBytes($bytes, $precision = 2)
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+        for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
+            $bytes /= 1024;
+        }
+
+        return round($bytes, $precision) . ' ' . $units[$i];
     }
 
 }

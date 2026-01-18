@@ -158,14 +158,15 @@ class User extends Authenticatable
     /**
      * Ganar puntos automáticamente.
      * 1$ = 0.03 puntos
+     * @return float Puntos ganados
      */
-    public function earnPoints(float $amount, ?int $orderId = null, ?string $description = null): void
+    public function earnPoints(float $amount, ?int $orderId = null, ?string $description = null): float
     {
         // Calcular puntos: 1$ = 0.03 puntos
         $pointsEarned = round($amount * 0.03, 2);
 
         if ($pointsEarned <= 0) {
-            return;
+            return 0;
         }
 
         $this->points = $this->getAvailablePoints() + $pointsEarned;
@@ -180,6 +181,8 @@ class User extends Authenticatable
             'description' => $description ?? "Puntos ganados por orden #{$orderId}",
             'balance_after' => $this->points,
         ]);
+
+        return $pointsEarned;
     }
 
     /**
@@ -190,5 +193,72 @@ class User extends Authenticatable
     {
         // 100 puntos = 1$ de descuento
         return round($points / 100, 2);
+    }
+
+    /**
+     * Asignar puntos ya calculados al usuario.
+     * Útil cuando los puntos se calcularon previamente (ej: órdenes pre-registradas).
+     */
+    public function assignPoints(float $points, ?int $orderId = null, ?string $description = null): void
+    {
+        if ($points <= 0) {
+            return;
+        }
+
+        $this->points = $this->getAvailablePoints() + $points;
+        $this->save();
+
+        // Registrar transacción
+        \App\Models\PointTransaction::create([
+            'user_id' => $this->id,
+            'order_id' => $orderId,
+            'type' => 'earned',
+            'points' => $points,
+            'description' => $description ?? "Puntos asignados por orden #{$orderId}",
+            'balance_after' => $this->points,
+        ]);
+    }
+
+    /**
+     * Asignar órdenes pre-registradas al usuario cuando se registra.
+     * Busca órdenes POS pre-registradas que coincidan por teléfono o cédula.
+     */
+    public function assignPreRegisteredOrders(): array
+    {
+        $assignedOrders = [];
+        
+        // Buscar órdenes pre-registradas que coincidan por teléfono o cédula
+        $preRegisteredOrders = Order::where('is_pre_registered', true)
+            ->whereNull('user_id')
+            ->where(function ($query) {
+                if ($this->tel) {
+                    $query->where('customer_tel', $this->tel);
+                }
+                if ($this->cedula_ID) {
+                    $query->orWhere('customer_cedula_ID', $this->cedula_ID);
+                }
+            })
+            ->get();
+
+        foreach ($preRegisteredOrders as $order) {
+            // Asignar la orden al usuario
+            $order->update([
+                'user_id' => $this->id,
+                'is_pre_registered' => false,
+            ]);
+
+            // Transferir puntos ganados al usuario
+            if ($order->points_earned > 0) {
+                $this->assignPoints(
+                    (float) $order->points_earned,
+                    $order->id,
+                    "Puntos ganados por orden POS pre-registrada #{$order->id}"
+                );
+            }
+
+            $assignedOrders[] = $order;
+        }
+
+        return $assignedOrders;
     }
 }

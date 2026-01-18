@@ -58,6 +58,15 @@ class OrderChatController extends Controller
             }
 
             $messages = $query->get();
+            
+            // Cargar roles para cada usuario que tiene mensajes
+            foreach ($messages as $message) {
+                if ($message->user_id && $message->user) {
+                    $message->user->load('roles:name');
+                    // Asegurar que los roles se incluyan en la serialización
+                    $message->user->makeVisible('roles');
+                }
+            }
 
             return response()->json([
                 'order_id' => $orderId,

@@ -22,14 +22,31 @@ class OrderMessageSent implements ShouldBroadcastNow
     public $sender;
     public $order;
 
-    public function __construct(Message $message, User $sender, Order $order)
+    public function __construct(Message $message, ?User $sender, Order $order)
     {
-        $this->message = $message->load('user:id,name,email,avatar');
-        $this->sender = [
+        // Cargar user solo si existe (no para mensajes del sistema)
+        if ($message->user_id) {
+            $this->message = $message->load(['user:id,name,email,avatar' => function ($query) {
+                // Cargar roles del usuario
+            }]);
+            // Cargar roles después de cargar el user
+            if ($this->message->user) {
+                $this->message->user->load('roles:name');
+            }
+        } else {
+            $this->message = $message;
+        }
+        
+        $this->sender = $sender ? [
             'id' => $sender->id,
             'name' => $sender->name,
             'role' => $this->getUserRole($sender, $order),
+        ] : [
+            'id' => null,
+            'name' => 'Sistema',
+            'role' => 'system',
         ];
+        
         $this->order = [
             'id' => $order->id,
             'status' => $order->status,
@@ -56,25 +73,44 @@ class OrderMessageSent implements ShouldBroadcastNow
 
     public function broadcastWith(): array
     {
+        $messageData = [
+            'id' => $this->message->id,
+            'order_id' => $this->message->order_id,
+            'user_id' => $this->message->user_id,
+            'message' => $this->message->message,
+            'message_type' => $this->message->message_type,
+            'file_path' => $this->message->file_path,
+            'is_delivery_message' => $this->message->is_delivery_message,
+            'is_system' => $this->message->is_system ?? false,
+            'system_message_type' => $this->message->system_message_type ?? null,
+            'is_read' => $this->message->is_read,
+            'created_at' => $this->message->created_at->toIso8601String(),
+        ];
+
+        // Incluir user solo si existe (no para mensajes del sistema)
+        if ($this->message->user_id && $this->message->relationLoaded('user') && $this->message->user) {
+            $userData = [
+                'id' => $this->message->user->id,
+                'name' => $this->message->user->name,
+                'email' => $this->message->user->email,
+                'avatar' => $this->message->user->avatar,
+            ];
+            
+            // Incluir roles si están cargados
+            if ($this->message->user->relationLoaded('roles')) {
+                $userData['roles'] = $this->message->user->roles->map(function ($role) {
+                    return ['name' => $role->name];
+                })->toArray();
+            }
+            
+            $messageData['user'] = $userData;
+        } else {
+            $messageData['user'] = null;
+        }
+
         return [
             'order' => $this->order,
-            'message' => [
-                'id' => $this->message->id,
-                'order_id' => $this->message->order_id,
-                'user_id' => $this->message->user_id,
-                'message' => $this->message->message,
-                'message_type' => $this->message->message_type,
-                'file_path' => $this->message->file_path,
-                'is_delivery_message' => $this->message->is_delivery_message,
-                'is_read' => $this->message->is_read,
-                'created_at' => $this->message->created_at->toIso8601String(),
-                'user' => [
-                    'id' => $this->message->user->id,
-                    'name' => $this->message->user->name,
-                    'email' => $this->message->user->email,
-                    'avatar' => $this->message->user->avatar,
-                ],
-            ],
+            'message' => $messageData,
             'sender' => $this->sender,
         ];
     }

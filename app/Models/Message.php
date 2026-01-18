@@ -16,6 +16,8 @@ class Message extends Model
         'message_type',
         'file_path',
         'is_delivery_message',
+        'is_system',
+        'system_message_type',
         'is_read',
         'read_at',
     ];
@@ -23,6 +25,7 @@ class Message extends Model
     protected $casts = [
         'is_read' => 'boolean',
         'is_delivery_message' => 'boolean',
+        'is_system' => 'boolean',
         'read_at' => 'datetime',
     ];
 

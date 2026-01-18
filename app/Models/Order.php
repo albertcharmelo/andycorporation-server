@@ -41,9 +41,11 @@ class Order extends Model
         'amount_usd',
         'customer_score',
         'is_pos_order',
+        'is_pre_registered',
         // Campos de puntos
         'points_used',
         'points_discount',
+        'points_earned',
     ];
 
     protected $casts = [
@@ -61,8 +63,10 @@ class Order extends Model
         'amount_usd'          => 'decimal:2',
         'customer_score'     => 'integer',
         'is_pos_order'       => 'boolean',
+        'is_pre_registered'  => 'boolean',
         'points_used'        => 'decimal:2',
         'points_discount'    => 'decimal:2',
+        'points_earned'      => 'decimal:2',
     ];
 
     /**

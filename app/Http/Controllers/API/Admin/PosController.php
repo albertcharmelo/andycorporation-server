@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PointsConfig;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -13,7 +14,8 @@ use Illuminate\Support\Facades\DB;
 class PosController extends Controller
 {
     /**
-     * Buscar cliente por teléfono o cédula/RIF.
+     * Buscar cliente por teléfono, cédula/RIF, nombre o email.
+     * Solo busca usuarios con rol 'client' (excluye delivery y admin).
      *
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
@@ -25,10 +27,20 @@ class PosController extends Controller
         ]);
 
         $search = $request->search;
+        $searchLower = strtolower($search);
 
-        // Buscar por teléfono o cédula
-        $customers = User::where('tel', 'like', "%{$search}%")
-            ->orWhere('cedula_ID', 'like', "%{$search}%")
+        // Buscar solo usuarios con rol 'client' o sin roles (clientes por defecto)
+        // Excluir usuarios con roles 'delivery' o 'admin'
+        $customers = User::where(function ($q) {
+                $q->role('client')
+                  ->orWhereDoesntHave('roles');
+            })
+            ->where(function ($q) use ($searchLower) {
+                $q->whereRaw('LOWER(name) LIKE ?', ["%{$searchLower}%"])
+                  ->orWhereRaw('LOWER(email) LIKE ?', ["%{$searchLower}%"])
+                  ->orWhereRaw('LOWER(tel) LIKE ?', ["%{$searchLower}%"])
+                  ->orWhereRaw('LOWER(cedula_ID) LIKE ?', ["%{$searchLower}%"]);
+            })
             ->select('id', 'name', 'email', 'tel', 'cedula_type', 'cedula_ID')
             ->limit(10)
             ->get();
@@ -87,14 +99,13 @@ class PosController extends Controller
         $search = $request->query('search', '');
         $perPage = $request->query('per_page', 50);
 
-        $query = Product::with('images')
-            ->where('stock_status', 'instock')
-            ->where('stock_quantity', '>', 0);
+        $query = Product::with('images');
 
         if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('sku', 'like', "%{$search}%");
+            $searchLower = strtolower($search);
+            $query->where(function ($q) use ($searchLower) {
+                $q->whereRaw('LOWER(name) LIKE ?', ["%{$searchLower}%"])
+                  ->orWhereRaw('LOWER(sku) LIKE ?', ["%{$searchLower}%"]);
             });
         }
 
@@ -177,10 +188,36 @@ class PosController extends Controller
 
         DB::beginTransaction();
         try {
-            // Obtener o crear cliente
+            // Obtener o buscar cliente
             $customer = null;
             if ($request->customer_id) {
+                // Cliente seleccionado explícitamente
                 $customer = User::find($request->customer_id);
+            } else {
+                // Si no se seleccionó cliente, buscar por teléfono o cédula
+                // Validación de seguridad: si el tel/cédula ya existe, asignar automáticamente
+                if ($request->customer_tel || $request->customer_cedula_ID) {
+                    $existingCustomer = User::where(function ($query) use ($request) {
+                        if ($request->customer_tel) {
+                            $query->where('tel', $request->customer_tel);
+                        }
+                        if ($request->customer_cedula_ID) {
+                            $query->orWhere('cedula_ID', $request->customer_cedula_ID);
+                        }
+                    })
+                    ->where(function ($query) {
+                        // Solo buscar usuarios con rol client o sin roles (excluir delivery y admin)
+                        $query->role('client')
+                              ->orWhereDoesntHave('roles');
+                    })
+                    ->first();
+                    
+                    if ($existingCustomer) {
+                        // Cliente existe: asignar automáticamente
+                        $customer = $existingCustomer;
+                    }
+                    // Si no existe, $customer sigue siendo null y se creará orden pre-registrada
+                }
             }
 
             // Calcular subtotal y total
@@ -220,6 +257,42 @@ class PosController extends Controller
                 $customerScore = Order::where('user_id', $customer->id)->sum('customer_score');
             }
 
+            // Calcular puntos ganados
+            $pointsEarned = 0;
+            $isPreRegistered = false;
+            
+            if ($customer) {
+                // Usuario registrado: calcular y asignar puntos inmediatamente
+                $pointsConfig = PointsConfig::getActive();
+                if ($pointsConfig) {
+                    // Determinar la moneda para calcular puntos
+                    $currencyForPoints = $request->currency;
+                    $amountForPoints = $currencyForPoints === 'USD' ? $amountUsd : $amountBs;
+                    
+                    // Convertir BS a USD si es necesario (asumiendo tasa fija, ajustar según necesidad)
+                    if ($currencyForPoints === 'BS' && $pointsConfig->currency === 'USD') {
+                        // Aquí se podría agregar conversión de moneda si es necesario
+                        // Por ahora, asumimos que la configuración está en la misma moneda
+                    }
+                    
+                    $pointsEarned = $pointsConfig->calculatePoints($amountForPoints, $currencyForPoints);
+                    
+                    // Asignar puntos inmediatamente al usuario
+                    if ($pointsEarned > 0) {
+                        $customer->earnPoints((float) $pointsEarned, null, "Puntos ganados por orden POS (pendiente)");
+                    }
+                }
+            } else {
+                // Usuario no registrado: calcular puntos pero no asignarlos aún
+                $pointsConfig = PointsConfig::getActive();
+                if ($pointsConfig) {
+                    $currencyForPoints = $request->currency;
+                    $amountForPoints = $currencyForPoints === 'USD' ? $amountUsd : $amountBs;
+                    $pointsEarned = $pointsConfig->calculatePoints($amountForPoints, $currencyForPoints);
+                }
+                $isPreRegistered = true;
+            }
+
             // Crear la orden
             $order = Order::create([
                 'user_id' => $customer ? $customer->id : null,
@@ -243,7 +316,25 @@ class PosController extends Controller
                 'amount_usd' => $amountUsd,
                 'customer_score' => $customerScore,
                 'is_pos_order' => true,
+                'is_pre_registered' => $isPreRegistered,
+                'points_earned' => $pointsEarned,
             ]);
+            
+            // Si el usuario está registrado y se asignaron puntos, actualizar la transacción con el order_id
+            if ($customer && $pointsEarned > 0) {
+                $latestTransaction = $customer->pointTransactions()
+                    ->where('type', 'earned')
+                    ->whereNull('order_id')
+                    ->latest()
+                    ->first();
+                
+                if ($latestTransaction) {
+                    $latestTransaction->update([
+                        'order_id' => $order->id,
+                        'description' => "Puntos ganados por orden POS #{$order->id}"
+                    ]);
+                }
+            }
 
             // Crear los items de la orden
             foreach ($orderItems as $itemData) {

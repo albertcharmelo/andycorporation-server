@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Message;
 use App\Models\Order;
 use App\Events\OrderMessageSent;
+use App\Services\ExpoPushNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -26,6 +27,15 @@ class ChatController extends Controller
             $messages = Message::forOrder($orderId)
                 ->with('user:id,name,email,avatar')
                 ->get();
+            
+            // Cargar roles para cada usuario que tiene mensajes
+            foreach ($messages as $message) {
+                if ($message->user_id && $message->user) {
+                    $message->user->load('roles:name');
+                    // Asegurar que los roles se incluyan en la serialización
+                    $message->user->makeVisible('roles');
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -99,6 +109,41 @@ class ChatController extends Controller
                     'trace' => $e->getTraceAsString(),
                 ]);
                 // No lanzar excepción, el mensaje ya está guardado
+            }
+
+            // Enviar notificación push al cliente cuando admin envía mensaje
+            try {
+                // Solo enviar notificación si el mensaje es de un admin y hay un cliente en la orden
+                if ($isAdmin && $order->user_id && $order->user_id !== $user->id) {
+                    $notificationService = new ExpoPushNotificationService();
+                    
+                    // Truncar mensaje para la notificación (máximo 100 caracteres)
+                    $messagePreview = mb_strlen($request->message) > 100 
+                        ? mb_substr($request->message, 0, 100) . '...' 
+                        : $request->message;
+                    
+                    $notificationService->sendToUser(
+                        $order->user_id,
+                        'Nuevo mensaje - Orden #' . $order->order_number,
+                        $messagePreview,
+                        [
+                            'type' => 'new_message',
+                            'order_id' => $order->id,
+                            'order_number' => $order->order_number,
+                        ]
+                    );
+                    
+                    Log::info('[Admin Chat] Notificación push enviada al cliente', [
+                        'order_id' => $orderId,
+                        'client_id' => $order->user_id,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                // No fallar el envío del mensaje si la notificación falla
+                Log::error('[Admin Chat] Error al enviar notificación push al cliente', [
+                    'order_id' => $orderId,
+                    'error' => $e->getMessage(),
+                ]);
             }
 
             return response()->json([
