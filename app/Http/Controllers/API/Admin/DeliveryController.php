@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -124,6 +125,44 @@ class DeliveryController extends Controller
             }
 
             DB::commit();
+
+            // Recargar orden con relaciones
+            $order->refresh();
+            $order->load(['user:id,name', 'delivery:id,name', 'address']);
+
+            // Crear notificación para el delivery
+            try {
+                $notificationService = app(NotificationService::class);
+                $orderNumber = 'ORD-' . str_pad($order->id, 6, '0', STR_PAD_LEFT);
+                
+                $notificationService->create(
+                    $delivery->id,
+                    'order_assigned',
+                    'Nueva orden asignada',
+                    "Se te ha asignado la orden #{$orderNumber}",
+                    [
+                        'order_id' => $order->id,
+                        'order_number' => $orderNumber,
+                        'user_id' => $order->user_id,
+                        'user_name' => $order->user?->name,
+                        'address' => $order->address ? [
+                            'address_line_1' => $order->address->address_line_1,
+                            'address_line_2' => $order->address->address_line_2,
+                            'name' => $order->address->name,
+                            'latitude' => $order->address->latitude,
+                            'longitude' => $order->address->longitude,
+                        ] : null,
+                        'total' => $order->total,
+                    ],
+                    true // Enviar push notification
+                );
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Error al crear notificación de asignación', [
+                    'order_id' => $order->id,
+                    'delivery_id' => $delivery->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return response()->json([
                 'success' => true,

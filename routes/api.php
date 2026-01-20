@@ -8,6 +8,7 @@ use App\Http\Controllers\API\Admin\PosController;
 use App\Http\Controllers\API\Admin\PointsConfigController;
 use App\Http\Controllers\API\PointController;
 use App\Http\Controllers\API\PushTokenController;
+use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CheckoutController;
@@ -73,6 +74,7 @@ Route::prefix('products')->group(function () {
     Route::get('/searchByName', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'searchProducts']);
     Route::get('/popularProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getPopularProducts']);
     Route::get('/salesProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getSalesProducts']);
+    Route::get('/latestProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getLatestProducts']);
     Route::get('/{product}', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'getProduct']);
     ## Sincronizar con Wordpress
     Route::get('syncProducts', [\App\Http\Controllers\API\PRODUCTS\ProductsController::class, 'syncProducts']);
@@ -149,6 +151,15 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::prefix('push-tokens')->group(function () {
         Route::post('/register', [PushTokenController::class, 'register']);                          // Registrar/actualizar token push
         Route::delete('/{token}', [PushTokenController::class, 'delete']);                             // Eliminar token push
+    });
+
+    // Notificaciones
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);                                    // Listar notificaciones con paginación
+        Route::get('/unread-count', [NotificationController::class, 'unreadCount']);                    // Contador de no leídas
+        Route::put('/{id}/read', [NotificationController::class, 'markAsRead']);                       // Marcar como leída
+        Route::put('/read-all', [NotificationController::class, 'markAllAsRead']);                      // Marcar todas como leídas
+        Route::get('/{id}', [NotificationController::class, 'show']);                                  // Detalle de notificación
     });
 });
 

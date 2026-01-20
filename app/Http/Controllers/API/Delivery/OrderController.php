@@ -4,11 +4,16 @@ namespace App\Http\Controllers\API\Delivery;
 
 use App\Http\Controllers\Controller;
 use App\Events\DeliveryLocationUpdated;
+use App\Events\OrderSOSActivated;
 use App\Models\DeliveryLocation;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
+use App\Models\User;
+use App\Services\ExpoPushNotificationService;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
 {
@@ -240,10 +245,70 @@ class OrderController extends Controller
 
             DB::commit();
 
+            // Recargar orden con relaciones
+            $order->refresh();
+            $order->load(['user:id,name', 'address', 'items', 'delivery:id,name']);
+
+            // Crear notificaciones para cliente y admin
+            try {
+                $notificationService = app(NotificationService::class);
+                $orderNumber = 'ORD-' . str_pad($order->id, 6, '0', STR_PAD_LEFT);
+                $statusLabels = [
+                    'on_the_way' => 'En camino',
+                    'delivered' => 'Entregada',
+                ];
+                $statusLabel = $statusLabels[$newStatus] ?? $newStatus;
+
+                // Notificar al cliente
+                if ($order->user) {
+                    $notificationService->create(
+                        $order->user_id,
+                        'order_status_changed',
+                        "Estado de orden actualizado",
+                        "Tu orden #{$orderNumber} está ahora: {$statusLabel}",
+                        [
+                            'order_id' => $order->id,
+                            'order_number' => $orderNumber,
+                            'status' => $newStatus,
+                            'status_label' => $statusLabel,
+                            'delivery_name' => $order->delivery?->name,
+                        ],
+                        true // Enviar push notification
+                    );
+                }
+
+                // Notificar a todos los admins
+                $admins = User::role(['admin', 'super_admin'])->get();
+                foreach ($admins as $admin) {
+                    $notificationService->create(
+                        $admin->id,
+                        'order_status_changed',
+                        "Estado de orden actualizado",
+                        "El delivery {$order->delivery?->name} actualizó la orden #{$orderNumber} a: {$statusLabel}",
+                        [
+                            'order_id' => $order->id,
+                            'order_number' => $orderNumber,
+                            'status' => $newStatus,
+                            'status_label' => $statusLabel,
+                            'delivery_id' => $order->delivery_id,
+                            'delivery_name' => $order->delivery?->name,
+                            'user_id' => $order->user_id,
+                            'user_name' => $order->user?->name,
+                        ],
+                        true // Enviar push notification
+                    );
+                }
+            } catch (\Exception $e) {
+                Log::error('Error al crear notificaciones de cambio de estado', [
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Estado actualizado exitosamente',
-                'order' => $order->load(['user:id,name', 'address', 'items']),
+                'order' => $order,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -391,19 +456,71 @@ class OrderController extends Controller
 
             // Recargar la orden con relaciones
             $order->refresh();
-            $order->load(['user:id,name', 'address']);
+            $order->load(['user:id,name', 'address', 'delivery:id,name']);
+
+            // 1. Emitir evento Pusher para el dashboard de admin
+            try {
+                broadcast(new OrderSOSActivated($order));
+                Log::info('Evento SOS emitido exitosamente', [
+                    'order_id' => $order->id,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Error al emitir evento SOS', [
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            // 2. Crear notificación en DB para admin
+            try {
+                $notificationService = app(NotificationService::class);
+                $orderNumber = 'ORD-' . str_pad($order->id, 6, '0', STR_PAD_LEFT);
+                
+                // Notificar a todos los admins
+                $admins = User::role(['admin', 'super_admin'])->get();
+                foreach ($admins as $admin) {
+                    $notificationService->create(
+                        $admin->id,
+                        'sos_activated',
+                        '🚨 SOS Activado',
+                        "El delivery {$order->delivery?->name} activó un SOS para la orden #{$orderNumber}",
+                        [
+                            'order_id' => $order->id,
+                            'order_number' => $orderNumber,
+                            'sos_comment' => $order->sos_comment,
+                            'sos_reported_at' => $order->sos_reported_at?->toIso8601String(),
+                            'delivery_id' => $order->delivery_id,
+                            'delivery_name' => $order->delivery?->name,
+                            'user_id' => $order->user_id,
+                            'user_name' => $order->user?->name,
+                        ],
+                        true // Enviar push notification
+                    );
+                }
+            } catch (\Exception $e) {
+                Log::error('Error al crear notificaciones DB de SOS', [
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            // 3. Enviar notificaciones push a órdenes del día no entregadas
+            try {
+                $this->notifyTodayOrders($order);
+            } catch (\Exception $e) {
+                Log::error('Error al enviar notificaciones push SOS', [
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return response()->json([
-                'success' => true,
                 'message' => 'SOS activado exitosamente. El administrador ha sido notificado.',
-                'data' => [
+                'order' => [
                     'id' => $order->id,
-                    'numero' => $this->formatOrderNumber($order->id),
-                    'sos_status' => true,
+                    'sos_status' => $order->sos_status,
                     'sos_comment' => $order->sos_comment,
                     'sos_reported_at' => $order->sos_reported_at->toIso8601String(),
-                    'status' => $order->status,
-                    'notes_updated' => true,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -413,6 +530,91 @@ class OrderController extends Controller
                 'message' => 'Error al activar SOS',
                 'error' => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * Enviar notificaciones push a todas las órdenes del día que no han sido entregadas.
+     * Se excluye la orden que activó el SOS.
+     *
+     * @param Order $triggerOrder La orden que activó el SOS
+     * @return void
+     */
+    private function notifyTodayOrders(Order $triggerOrder): void
+    {
+        try {
+            // Obtener órdenes del día que no han sido entregadas
+            $todayOrders = Order::whereDate('created_at', today())
+                ->whereNotIn('status', ['delivered', 'completed'])
+                ->where('id', '!=', $triggerOrder->id) // Excluir la orden que activó el SOS
+                ->with(['user.pushTokens' => function ($query) {
+                    $query->where('is_active', true);
+                }])
+                ->get();
+
+            if ($todayOrders->isEmpty()) {
+                Log::info('No hay órdenes del día para notificar sobre SOS', [
+                    'trigger_order_id' => $triggerOrder->id,
+                ]);
+                return;
+            }
+
+            $notificationService = new ExpoPushNotificationService();
+            $notifiedCount = 0;
+
+            foreach ($todayOrders as $order) {
+                if (!$order->user) {
+                    continue;
+                }
+
+                // Obtener tokens activos del usuario
+                $tokens = $order->user->pushTokens()->where('is_active', true)->get();
+
+                if ($tokens->isEmpty()) {
+                    continue;
+                }
+
+                // Enviar notificación a cada token del usuario
+                $orderNumber = 'ORD-' . str_pad($order->id, 6, '0', STR_PAD_LEFT);
+                $title = 'Alerta SOS Activada';
+                $body = "Se ha activado un SOS en otra orden del día. Revisa tu pedido #{$orderNumber}.";
+
+                $sent = $notificationService->sendToUser(
+                    $order->user_id,
+                    $title,
+                    $body,
+                    [
+                        'type' => 'sos_alert',
+                        'order_id' => $order->id,
+                        'order_number' => $orderNumber,
+                        'trigger_order_id' => $triggerOrder->id,
+                        'trigger_order_number' => 'ORD-' . str_pad($triggerOrder->id, 6, '0', STR_PAD_LEFT),
+                        'sos_comment' => $triggerOrder->sos_comment,
+                        'sos_reported_at' => $triggerOrder->sos_reported_at?->toIso8601String(),
+                    ]
+                );
+
+                if ($sent > 0) {
+                    $notifiedCount++;
+                    Log::info('Notificación SOS enviada a usuario', [
+                        'user_id' => $order->user_id,
+                        'order_id' => $order->id,
+                        'tokens_sent' => $sent,
+                    ]);
+                }
+            }
+
+            Log::info('Notificaciones SOS enviadas a órdenes del día', [
+                'trigger_order_id' => $triggerOrder->id,
+                'total_orders' => $todayOrders->count(),
+                'notified_users' => $notifiedCount,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al enviar notificaciones push SOS a órdenes del día', [
+                'trigger_order_id' => $triggerOrder->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
         }
     }
 }

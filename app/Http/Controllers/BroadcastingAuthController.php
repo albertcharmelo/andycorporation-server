@@ -88,7 +88,11 @@ class BroadcastingAuthController extends Controller
 
             return response()->json([
                 'message' => 'Error al autenticar',
-                'error' => $e,
+                'error' => [
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ],
             ], 500);
         }
     }

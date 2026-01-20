@@ -222,7 +222,6 @@ class ProductsController extends Controller
 
 
         $products = Product::with(['images', 'categories'])
-            ->where('stock_status', Product::STOCK_STATUS_INSTOCK)
             ->orderBy('woocommerce_id', 'desc')
             ->paginate(20);
 
@@ -269,8 +268,7 @@ class ProductsController extends Controller
         $queryString = $request->input('query', '');
         $filters = $request->input('filters', []);
 
-        $baseQuery = Product::with(['images', 'categories'])
-            ->where('stock_status', Product::STOCK_STATUS_INSTOCK);
+        $baseQuery = Product::with(['images', 'categories']);
 
         ## Si hay un término de búsqueda, aplicarlo
         if ($queryString !== '') {
@@ -346,7 +344,6 @@ class ProductsController extends Controller
     public function getPromotionalProducts()
     {
         $products = Product::with(['images', 'categories'])
-            ->where('stock_status', Product::STOCK_STATUS_INSTOCK)
             ->whereNotNull('sale_price')
             ->whereColumn('sale_price', '<', 'regular_price')
             ->inRandomOrder() // para obtener productos aleatorios
@@ -376,6 +373,19 @@ class ProductsController extends Controller
         $products = Product::with(['images', 'categories'])
             ->orderBy('total_sales', 'desc')
             ->inRandomOrder() // para obtener productos aleatorios
+            ->take(20)
+            ->get();
+
+        return response()->json([
+            'products' => $products,
+        ])->setStatusCode(200, 'OK');
+    }
+
+    ## Get Latest products
+    public function getLatestProducts()
+    {
+        $products = Product::with(['images', 'categories'])
+            ->orderBy('created_at', 'desc')
             ->take(20)
             ->get();
 

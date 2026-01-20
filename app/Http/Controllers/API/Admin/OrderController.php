@@ -5,8 +5,10 @@ namespace App\Http\Controllers\API\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Message;
+use App\Models\User;
 use App\Events\OrderMessageSent;
 use App\Services\ExpoPushNotificationService;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -271,48 +273,88 @@ class OrderController extends Controller
 
             DB::commit();
 
-            // Enviar notificación push al usuario si el estado cambió a uno importante
-            if (in_array($request->status, ['paid', 'shipped', 'completed', 'cancelled']) && $order->user) {
-                try {
-                    $notificationService = new ExpoPushNotificationService();
-                    
-                    // Títulos y mensajes según el estado
+            // Recargar orden con relaciones
+            $order->refresh();
+            $order->load(['user:id,name', 'delivery:id,name', 'address']);
+
+            // Crear notificaciones para cliente y delivery
+            try {
+                $notificationService = app(NotificationService::class);
+                $orderNumber = 'ORD-' . str_pad($order->id, 6, '0', STR_PAD_LEFT);
+                
+                // Títulos y mensajes según el estado
+                $statusLabels = [
+                    'pending_payment' => 'Pendiente de pago',
+                    'paid' => 'Pagada',
+                    'shipped' => 'Enviada',
+                    'completed' => 'Completada',
+                    'cancelled' => 'Cancelada',
+                    'refunded' => 'Reembolsada',
+                ];
+                $statusLabel = $statusLabels[$request->status] ?? $request->status;
+
+                // Notificar al cliente
+                if ($order->user && in_array($request->status, ['paid', 'shipped', 'completed', 'cancelled', 'refunded'])) {
                     $titles = [
                         'paid' => 'Orden pagada',
                         'shipped' => 'Orden enviada',
                         'completed' => 'Orden completada',
                         'cancelled' => 'Orden cancelada',
+                        'refunded' => 'Orden reembolsada',
                     ];
                     
                     $messages = [
-                        'paid' => "Tu orden #{$order->id} ha sido pagada y está siendo procesada",
-                        'shipped' => "Tu orden #{$order->id} ha sido enviada",
-                        'completed' => "Tu orden #{$order->id} ha sido completada",
-                        'cancelled' => "Tu orden #{$order->id} ha sido cancelada",
+                        'paid' => "Tu orden #{$orderNumber} ha sido pagada y está siendo procesada",
+                        'shipped' => "Tu orden #{$orderNumber} ha sido enviada",
+                        'completed' => "Tu orden #{$orderNumber} ha sido completada",
+                        'cancelled' => "Tu orden #{$orderNumber} ha sido cancelada",
+                        'refunded' => "Tu orden #{$orderNumber} ha sido reembolsada",
                     ];
                     
                     $title = $titles[$request->status] ?? 'Estado de orden actualizado';
-                    $body = $messages[$request->status] ?? "Tu orden #{$order->id} ha cambiado de estado";
+                    $body = $messages[$request->status] ?? "Tu orden #{$orderNumber} ha cambiado de estado a: {$statusLabel}";
                     
-                    $notificationService->sendToUser(
+                    $notificationService->create(
                         $order->user_id,
+                        'order_status_changed',
                         $title,
                         $body,
                         [
-                            'type' => 'order_status_changed',
                             'order_id' => $order->id,
+                            'order_number' => $orderNumber,
                             'status' => $request->status,
-                        ]
+                            'status_label' => $statusLabel,
+                        ],
+                        true // Enviar push notification
                     );
-                } catch (\Exception $e) {
-                    // No fallar la actualización del estado si la notificación falla
-                    Log::error('Error al enviar notificación push de cambio de estado', [
-                        'order_id' => $order->id,
-                        'user_id' => $order->user_id,
-                        'status' => $request->status,
-                        'error' => $e->getMessage(),
-                    ]);
                 }
+
+                // Notificar al delivery si está asignado
+                if ($order->delivery_id && in_array($request->status, ['paid', 'shipped', 'cancelled', 'refunded'])) {
+                    $notificationService->create(
+                        $order->delivery_id,
+                        'order_status_changed',
+                        'Estado de orden actualizado por admin',
+                        "El admin cambió el estado de la orden #{$orderNumber} a: {$statusLabel}",
+                        [
+                            'order_id' => $order->id,
+                            'order_number' => $orderNumber,
+                            'status' => $request->status,
+                            'status_label' => $statusLabel,
+                            'user_id' => $order->user_id,
+                            'user_name' => $order->user?->name,
+                        ],
+                        true // Enviar push notification
+                    );
+                }
+            } catch (\Exception $e) {
+                // No fallar la actualización del estado si la notificación falla
+                Log::error('Error al crear notificaciones de cambio de estado', [
+                    'order_id' => $order->id,
+                    'user_id' => $order->user_id,
+                    'status' => $request->status,
+                    'error' => $e->getMessage(),
+                ]);
             }
 
             return response()->json([

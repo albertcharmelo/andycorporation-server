@@ -8,6 +8,8 @@ use App\Models\PaymentProof;
 use App\Models\DeliveryLocation;
 use App\Models\UserAddress; // Para validar la dirección de envío
 use App\Services\ExpoPushNotificationService;
+use App\Services\NotificationService;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -25,8 +27,9 @@ class CheckoutController extends Controller
     public function createOrder(Request $request)
     {
         // Validar los datos de la solicitud
+        // address_id es nullable para permitir retiro en tienda
         $request->validate([
-            'address_id'        => 'required|exists:user_addresses,id',  // Debe ser una dirección existente
+            'address_id'        => 'nullable|exists:user_addresses,id',  // Opcional: puede ser null para retiro en tienda
             'payment_method'    => 'required|string|in:manual_transfer,mobile_payment,pago_movil,zelle,paypal,binance,bank_transfer,agree_with_seller,credit_card', // Método de pago esperado
             'payment_reference' => 'required|string|max:255|unique:orders,payment_reference', // Referencia de pago obligatoria (transferencia bancaria del usuario)
             'notes'             => 'nullable|string|max:1000', // Notas adicionales opcionales
@@ -86,10 +89,15 @@ class CheckoutController extends Controller
         
         $total = $totalBeforeDiscount - $pointsDiscount;
 
-        // Validar que la dirección de envío pertenezca al usuario
-        $address = $user->addresses()->find($request->address_id);
-        if (! $address) {
-            return response()->json(['message' => 'La dirección de envío seleccionada no es válida o no te pertenece.'], 400);
+        // Validar que la dirección de envío pertenezca al usuario (solo si se proporciona)
+        // Si address_id es null, significa que es retiro en tienda
+        $address = null;
+        if ($request->address_id) {
+            // Si se proporciona address_id, debe ser válido y pertenecer al usuario
+            $address = $user->addresses()->find($request->address_id);
+            if (! $address) {
+                return response()->json(['message' => 'El campo address id seleccionado no existe.'], 400);
+            }
         }
 
         try {
@@ -102,9 +110,10 @@ class CheckoutController extends Controller
 
             // 3. Crear una nueva instancia de la orden
             // payment_reference viene del frontend (referencia de transferencia bancaria del usuario)
+            // address_id puede ser null para retiro en tienda
             $order = new Order([
                 'user_id'           => $user->id,
-                'address_id'        => $request->address_id,
+                'address_id'        => $request->address_id ?: null, // null si es retiro en tienda
                 'subtotal'          => $subtotal,
                 'shipping_cost'     => $shippingCost,
                 'points_used'       => $pointsUsed,
@@ -113,7 +122,7 @@ class CheckoutController extends Controller
                 'payment_method'    => $request->payment_method,
                 'payment_reference' => $request->payment_reference, // Referencia de pago proporcionada por el usuario
                 'status'            => 'pending_payment',
-                'notes'             => $request->notes,
+                'notes'             => $request->notes ?: ($request->address_id ? null : 'Retiro en tienda'), // Agregar nota si es retiro en tienda
             ]);
 
             // 4. Guardar la orden en la base de datos para obtener el UUID
@@ -199,21 +208,46 @@ class CheckoutController extends Controller
                                                                                   // Se puede extender para cargar más detalles si es necesario para el resumen
             $order = Order::with(['items.product', 'address'])->find($order->id); // Recarga la orden con relaciones
 
-            // 8. Enviar notificación push al usuario
+            // 8. Crear notificaciones para cliente y admin
             try {
-                $notificationService = new ExpoPushNotificationService();
-                $notificationService->sendToUser(
+                $notificationService = app(NotificationService::class);
+                $orderNumber = 'ORD-' . str_pad($order->id, 6, '0', STR_PAD_LEFT);
+                
+                // Notificar al cliente
+                $notificationService->create(
                     $user->id,
+                    'order_created',
                     'Compra realizada',
-                    "Tu orden #{$order->id} ha sido creada exitosamente",
+                    "Tu orden #{$orderNumber} ha sido creada exitosamente",
                     [
-                        'type' => 'order_created',
                         'order_id' => $order->id,
-                    ]
+                        'order_number' => $orderNumber,
+                        'total' => $order->total,
+                    ],
+                    true // Enviar push notification
                 );
+                
+                // Notificar a todos los admins
+                $admins = User::role(['admin', 'super_admin'])->get();
+                foreach ($admins as $admin) {
+                    $notificationService->create(
+                        $admin->id,
+                        'order_created',
+                        'Nueva orden creada',
+                        "El cliente {$user->name} ha creado la orden #{$orderNumber}",
+                        [
+                            'order_id' => $order->id,
+                            'order_number' => $orderNumber,
+                            'user_id' => $user->id,
+                            'user_name' => $user->name,
+                            'total' => $order->total,
+                        ],
+                        true // Enviar push notification
+                    );
+                }
             } catch (\Exception $e) {
                 // No fallar la creación de la orden si la notificación falla
-                Log::error('Error al enviar notificación push de orden creada', [
+                Log::error('Error al crear notificaciones de orden creada', [
                     'order_id' => $order->id,
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),

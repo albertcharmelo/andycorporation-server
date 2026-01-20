@@ -7,6 +7,7 @@ use App\Models\Message;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\ExpoPushNotificationService;
+use App\Services\NotificationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -175,9 +176,15 @@ class SendOrderMessage implements ShouldQueue
                         'pusher_cluster' => config('broadcasting.connections.pusher.options.cluster'),
                     ]);
 
-                    // Enviar notificación push a los otros usuarios de la orden (no al que envió el mensaje)
+                    // Crear notificaciones en DB y enviar push a los otros usuarios de la orden (no al que envió el mensaje)
                     try {
-                        $notificationService = new ExpoPushNotificationService();
+                        $notificationService = app(NotificationService::class);
+                        $orderNumber = 'ORD-' . str_pad($order->id, 6, '0', STR_PAD_LEFT);
+                        
+                        // Truncar mensaje para la notificación (máximo 100 caracteres)
+                        $messagePreview = mb_strlen($this->messageText) > 100 
+                            ? mb_substr($this->messageText, 0, 100) . '...' 
+                            : $this->messageText;
                         
                         // Determinar a quién enviar la notificación
                         // Si el mensaje es del cliente, notificar a admin/delivery
@@ -185,40 +192,83 @@ class SendOrderMessage implements ShouldQueue
                         $usersToNotify = [];
                         
                         if ($userRole === 'client') {
-                            // Notificar a admin y delivery si están asignados
+                            // Notificar a delivery si está asignado
                             if ($order->delivery_id && $order->delivery_id !== $this->userId) {
-                                $usersToNotify[] = $order->delivery_id;
+                                $usersToNotify[] = [
+                                    'id' => $order->delivery_id,
+                                    'role' => 'delivery',
+                                ];
                             }
-                            // También notificar a admins (opcional, puede ser demasiadas notificaciones)
-                            // Por ahora solo notificamos al delivery si está asignado
-                        } else {
-                            // Si es admin o delivery, notificar al cliente
+                            // Notificar a admins
+                            $admins = User::role(['admin', 'super_admin'])->get();
+                            foreach ($admins as $admin) {
+                                if ($admin->id !== $this->userId) {
+                                    $usersToNotify[] = [
+                                        'id' => $admin->id,
+                                        'role' => 'admin',
+                                    ];
+                                }
+                            }
+                        } elseif ($userRole === 'delivery') {
+                            // Si es delivery, notificar al cliente
                             if ($order->user_id && $order->user_id !== $this->userId) {
-                                $usersToNotify[] = $order->user_id;
+                                $usersToNotify[] = [
+                                    'id' => $order->user_id,
+                                    'role' => 'client',
+                                ];
+                            }
+                            // También notificar a admins
+                            $admins = User::role(['admin', 'super_admin'])->get();
+                            foreach ($admins as $admin) {
+                                if ($admin->id !== $this->userId) {
+                                    $usersToNotify[] = [
+                                        'id' => $admin->id,
+                                        'role' => 'admin',
+                                    ];
+                                }
+                            }
+                        } else {
+                            // Si es admin, notificar al cliente y delivery
+                            if ($order->user_id && $order->user_id !== $this->userId) {
+                                $usersToNotify[] = [
+                                    'id' => $order->user_id,
+                                    'role' => 'client',
+                                ];
+                            }
+                            if ($order->delivery_id && $order->delivery_id !== $this->userId) {
+                                $usersToNotify[] = [
+                                    'id' => $order->delivery_id,
+                                    'role' => 'delivery',
+                                ];
                             }
                         }
                         
-                        // Truncar mensaje para la notificación (máximo 100 caracteres)
-                        $messagePreview = mb_strlen($this->messageText) > 100 
-                            ? mb_substr($this->messageText, 0, 100) . '...' 
-                            : $this->messageText;
-                        
-                        // Enviar notificación a cada usuario
-                        foreach ($usersToNotify as $userIdToNotify) {
-                            if ($userIdToNotify !== $this->userId) { // No notificar al que envió el mensaje
-                                $notificationService->sendToUser(
-                                    $userIdToNotify,
-                                    'Nuevo mensaje - Orden #' . $order->order_number,
-                                    $messagePreview,
+                        // Crear notificaciones en DB y enviar push
+                        foreach ($usersToNotify as $userToNotify) {
+                            if ($userToNotify['id'] !== $this->userId) {
+                                $senderName = $user->name;
+                                $title = 'Nuevo mensaje';
+                                $body = "{$senderName}: {$messagePreview}";
+                                
+                                $notificationService->create(
+                                    $userToNotify['id'],
+                                    'message_received',
+                                    $title,
+                                    $body,
                                     [
-                                        'type' => 'new_message',
                                         'order_id' => $order->id,
-                                        'order_number' => $order->order_number,
-                                    ]
+                                        'order_number' => $orderNumber,
+                                        'message_id' => $message->id,
+                                        'sender_id' => $this->userId,
+                                        'sender_name' => $senderName,
+                                        'message_preview' => $messagePreview,
+                                    ],
+                                    true // Enviar push notification
                                 );
                                 
-                                Log::info('SendOrderMessage: Notificación push enviada', [
-                                    'to_user_id' => $userIdToNotify,
+                                Log::info('SendOrderMessage: Notificación creada', [
+                                    'to_user_id' => $userToNotify['id'],
+                                    'to_role' => $userToNotify['role'],
                                     'order_id' => $this->orderId,
                                     'from_user_id' => $this->userId,
                                 ]);
@@ -226,7 +276,7 @@ class SendOrderMessage implements ShouldQueue
                         }
                     } catch (\Exception $notificationException) {
                         // No fallar el job si la notificación falla
-                        Log::error('SendOrderMessage: Error al enviar notificación push', [
+                        Log::error('SendOrderMessage: Error al crear notificaciones', [
                             'error' => $notificationException->getMessage(),
                             'order_id' => $this->orderId,
                             'trace' => $notificationException->getTraceAsString(),

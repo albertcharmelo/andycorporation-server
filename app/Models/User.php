@@ -96,6 +96,22 @@ class User extends Authenticatable
         return $this->hasMany(Message::class);
     }
 
+    /**
+     * Un usuario puede tener muchos tokens de notificación push.
+     */
+    public function pushTokens()
+    {
+        return $this->hasMany(PushToken::class);
+    }
+
+    /**
+     * Un usuario puede tener muchas notificaciones.
+     */
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
 
     /**
      * Transacciones de puntos del usuario.

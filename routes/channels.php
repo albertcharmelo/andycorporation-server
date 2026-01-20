@@ -98,8 +98,10 @@ Broadcast::channel('order.{orderId}', function ($user, $orderId) {
     return false;
 });
 
-// Canal privado para notificaciones de usuario (formato: private-user.{userId})
-Broadcast::channel('private-user.{userId}', function ($user, $userId) {
+// Canal privado para notificaciones de usuario
+// Laravel automáticamente agrega el prefijo 'private-', así que registramos como 'user.{userId}'
+// y Laravel lo maneja como 'private-user.{userId}'
+Broadcast::channel('user.{userId}', function ($user, $userId) {
     Log::info('[Broadcasting Auth] Verificando acceso a canal de usuario', [
         'user_id' => $user ? $user->id : null,
         'target_user_id' => $userId,
@@ -109,6 +111,11 @@ Broadcast::channel('private-user.{userId}', function ($user, $userId) {
         Log::info('[Broadcasting Auth] ✅ Acceso permitido a canal de usuario');
         return true;
     }
+    
+    Log::warning('[Broadcasting Auth] ❌ Acceso denegado a canal de usuario', [
+        'user_id' => $user ? $user->id : null,
+        'target_user_id' => $userId,
+    ]);
     
     return false;
 });
@@ -123,6 +130,53 @@ Broadcast::channel('private-admin.orders', function ($user) {
         Log::info('[Broadcasting Auth] ✅ Acceso permitido a canal de admin (modo debug)');
         return true;
     }
+    
+    return false;
+});
+
+// Canal privado para admin (formato: private-admin)
+// Usado para eventos SOS y otras notificaciones administrativas
+Broadcast::channel('admin', function ($user) {
+    Log::info('[Broadcasting Auth] Verificando acceso a canal admin', [
+        'user_id' => $user ? $user->id : null,
+    ]);
+    
+    // Verificar que el usuario es admin o super_admin
+    if ($user && $user->hasAnyRole(['admin', 'super_admin'])) {
+        Log::info('[Broadcasting Auth] ✅ Acceso permitido a canal admin', [
+            'user_id' => $user->id,
+            'roles' => $user->getRoleNames()->toArray(),
+        ]);
+        return true;
+    }
+    
+    Log::warning('[Broadcasting Auth] ❌ Acceso denegado a canal admin', [
+        'user_id' => $user ? $user->id : null,
+        'has_roles' => $user ? $user->getRoleNames()->toArray() : [],
+    ]);
+    
+    return false;
+});
+
+// Canal privado para notificaciones de admin (formato: private-admin.notifications)
+Broadcast::channel('admin.notifications', function ($user) {
+    Log::info('[Broadcasting Auth] Verificando acceso a canal admin.notifications', [
+        'user_id' => $user ? $user->id : null,
+    ]);
+    
+    // Verificar que el usuario es admin o super_admin
+    if ($user && $user->hasAnyRole(['admin', 'super_admin'])) {
+        Log::info('[Broadcasting Auth] ✅ Acceso permitido a canal admin.notifications', [
+            'user_id' => $user->id,
+            'roles' => $user->getRoleNames()->toArray(),
+        ]);
+        return true;
+    }
+    
+    Log::warning('[Broadcasting Auth] ❌ Acceso denegado a canal admin.notifications', [
+        'user_id' => $user ? $user->id : null,
+        'has_roles' => $user ? $user->getRoleNames()->toArray() : [],
+    ]);
     
     return false;
 });
