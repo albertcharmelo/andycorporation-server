@@ -63,6 +63,8 @@ class OrderController extends Controller
             'direccion' => $this->formatAddress($address),
             'latitud' => $address ? $address->latitude : null,
             'longitud' => $address ? $address->longitude : null,
+            'sos_status' => (bool) ($order->sos_status ?? false),
+            'sos_comment' => $order->sos_comment ?? null,
             'productos' => $order->items->map(function ($item) {
                 return [
                     'id' => $item->id,
@@ -197,16 +199,20 @@ class OrderController extends Controller
             $newStatus = $request->status;
             $currentStatus = $order->status;
 
+            // Normalizar 'shipped' a 'on_the_way' para las transiciones
+            // 'shipped' y 'on_the_way' son equivalentes para el delivery
+            $normalizedCurrentStatus = $currentStatus === 'shipped' ? 'on_the_way' : $currentStatus;
+
             // Validar transiciones válidas
             $validTransitions = [
                 'in_agency' => ['on_the_way'],
                 'on_the_way' => ['delivered'],
             ];
 
-            if (!isset($validTransitions[$currentStatus]) || !in_array($newStatus, $validTransitions[$currentStatus])) {
+            if (!isset($validTransitions[$normalizedCurrentStatus]) || !in_array($newStatus, $validTransitions[$normalizedCurrentStatus])) {
                 return response()->json([
                     'success' => false,
-                    'message' => "No se puede cambiar el estado de '{$currentStatus}' a '{$newStatus}'. Transiciones válidas: " . implode(' → ', $validTransitions[$currentStatus] ?? []),
+                    'message' => "No se puede cambiar el estado de '{$currentStatus}' a '{$newStatus}'. Transiciones válidas: " . implode(' → ', $validTransitions[$normalizedCurrentStatus] ?? []),
                 ], 400);
             }
 
@@ -518,8 +524,8 @@ class OrderController extends Controller
                 'message' => 'SOS activado exitosamente. El administrador ha sido notificado.',
                 'order' => [
                     'id' => $order->id,
-                    'sos_status' => $order->sos_status,
-                    'sos_comment' => $order->sos_comment,
+                    'sos_status' => (bool) ($order->sos_status ?? false),
+                    'sos_comment' => $order->sos_comment ?? null,
                     'sos_reported_at' => $order->sos_reported_at->toIso8601String(),
                 ],
             ]);

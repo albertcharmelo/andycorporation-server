@@ -206,7 +206,7 @@ class CheckoutController extends Controller
             DB::commit();
                                                                                   // 4. Mostrar resumen (La respuesta de esta API es el resumen inicial)
                                                                                   // Se puede extender para cargar más detalles si es necesario para el resumen
-            $order = Order::with(['items.product', 'address'])->find($order->id); // Recarga la orden con relaciones
+            $order = Order::with(['items.product.images', 'address'])->find($order->id); // Recarga la orden con relaciones
 
             // 8. Crear notificaciones para cliente y admin
             try {
@@ -287,7 +287,7 @@ class CheckoutController extends Controller
         $user = $request->user();
 
         // Buscar la orden por ID y asegurarse de que pertenece al usuario
-        $order = $user->orders()->with(['items.product', 'address'])->find($orderId);
+        $order = $user->orders()->with(['items.product.images', 'address'])->find($orderId);
 
         if (! $order) {
             return response()->json(['message' => 'Orden no encontrada o no te pertenece.'], 404);
@@ -378,7 +378,7 @@ class CheckoutController extends Controller
 
         // Consulta base con relaciones
         $query = $user->orders()
-            ->with(['items.product', 'address'])
+            ->with(['items.product.images', 'address'])
             ->orderBy('created_at', 'desc');
 
         // Aplicar filtro de estado si se proporciona
@@ -420,7 +420,7 @@ class CheckoutController extends Controller
 
         // Buscar la orden por ID y asegurarse de que pertenece al usuario
         $order = $user->orders()
-            ->with(['items.product', 'address', 'paymentProof'])
+            ->with(['items.product.images', 'address', 'paymentProof'])
             ->find($orderId);
 
         if (! $order) {

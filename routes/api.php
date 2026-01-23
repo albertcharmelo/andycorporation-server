@@ -49,6 +49,8 @@ Route::get('/user', function (Request $request) {
     ];
 })->middleware('auth:sanctum');
 
+Route::put('/user', [AuthController::class, 'updateProfile'])->middleware('auth:sanctum');
+
 // Ruta personalizada de autenticación de broadcasting para Pusher con Sanctum
 // Usa nuestro controlador personalizado que valida el usuario
 Route::post('/broadcasting/auth', [\App\Http\Controllers\BroadcastingAuthController::class, 'authenticate'])
@@ -63,6 +65,10 @@ Route::get('/dashboard', [\App\Http\Controllers\API\DashboardController::class, 
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
+    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+    Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 });
 
 
